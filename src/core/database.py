@@ -1,10 +1,8 @@
 import logging
 from datetime import datetime
-from pathlib import Path
-from typing import Optional
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, Integer, String, Text, create_engine
+    Boolean, Column, DateTime, Integer, String, Text, create_engine
 )
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 

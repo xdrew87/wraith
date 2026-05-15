@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from core.database import WatchTarget, Alert, get_db
+from core.database import WatchTarget, get_db
 from core.aggregator import aggregate
 
 logger = logging.getLogger(__name__)

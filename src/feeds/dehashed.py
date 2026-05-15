@@ -49,7 +49,6 @@ class DeHashedFeed(BaseFeed):
         entries = data.get("entries") or []
         for entry in entries:
             email = entry.get("email", "")
-            username = entry.get("username", "")
             password = entry.get("password", "")
             hashed_password = entry.get("hashed_password", "")
             database_name = entry.get("database_name", "")
