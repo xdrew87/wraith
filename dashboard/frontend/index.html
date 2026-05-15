@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WRAITH — Credential Monitor</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0f14; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+    a { color: #58a6ff; text-decoration: none; }
+
+    header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 18px; color: #00d4ff; letter-spacing: 3px; font-weight: 700; }
+    header span { font-size: 12px; color: #8b949e; margin-left: auto; }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-card .value { font-size: 28px; font-weight: 700; }
+    .stat-card .label { font-size: 11px; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+    .stat-card.critical .value { color: #f85149; }
+    .stat-card.high .value { color: #ff8800; }
+    .stat-card.medium .value { color: #d29922; }
+    .stat-card.low .value { color: #8b949e; }
+    .stat-card.targets .value { color: #58a6ff; }
+    .stat-card.total .value { color: #00d4ff; }
+
+    .section { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 20px; }
+    .section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #30363d;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .section-header h2 { font-size: 14px; color: #e6edf3; font-weight: 600; margin-right: auto; }
+
+    input[type=text], select {
+      background: #0d0f14;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      outline: none;
+    }
+    input[type=text]:focus, select:focus { border-color: #58a6ff; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; border-bottom: 1px solid #21262d; }
+    td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-size: 13px; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1c2128; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .badge-CRITICAL { background: rgba(248,81,73,0.2); color: #f85149; border: 1px solid rgba(248,81,73,0.4); }
+    .badge-HIGH { background: rgba(255,136,0,0.15); color: #ff8800; border: 1px solid rgba(255,136,0,0.3); }
+    .badge-MEDIUM { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+    .badge-LOW { background: rgba(139,148,158,0.1); color: #8b949e; border: 1px solid #30363d; }
+
+    .source-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+    .dot-ok { background: #3fb950; }
+    .dot-error { background: #f85149; }
+    .dot-unknown { background: #8b949e; }
+
+    .refresh-btn {
+      background: #21262d;
+      border: 1px solid #30363d;
+      color: #c9d1d9;
+      padding: 5px 12px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .refresh-btn:hover { background: #30363d; }
+
+    .empty { padding: 24px; text-align: center; color: #8b949e; font-size: 13px; }
+    .trunc { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+    #last-updated { font-size: 11px; color: #8b949e; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>⚡ WRAITH</h1>
+  <span style="color:#8b949e">Credential Exposure Monitor</span>
+  <span id="last-updated">Loading...</span>
+  <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+</header>
+
+<div class="container">
+  <!-- Stats -->
+  <div class="stats-grid" id="stats-grid">
+    <div class="stat-card total"><div class="value" id="s-total">—</div><div class="label">Total Findings</div></div>
+    <div class="stat-card critical"><div class="value" id="s-critical">—</div><div class="label">Critical</div></div>
+    <div class="stat-card high"><div class="value" id="s-high">—</div><div class="label">High</div></div>
+    <div class="stat-card medium"><div class="value" id="s-medium">—</div><div class="label">Medium</div></div>
+    <div class="stat-card low"><div class="value" id="s-low">—</div><div class="label">Low</div></div>
+    <div class="stat-card targets"><div class="value" id="s-targets">—</div><div class="label">Watch Targets</div></div>
+  </div>
+
+  <!-- Chart + Sources -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-header"><h2>Severity Distribution</h2></div>
+      <div style="padding:16px;max-height:220px"><canvas id="sev-chart"></canvas></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><h2>Feed Status</h2></div>
+      <table>
+        <thead><tr><th>Feed</th><th>Status</th><th>Last Run</th><th>Results</th></tr></thead>
+        <tbody id="sources-body"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Findings -->
+  <div class="section">
+    <div class="section-header">
+      <h2>Findings</h2>
+      <input type="text" id="filter-target" placeholder="Filter by target..." oninput="loadFindings()" style="width:180px" />
+      <select id="filter-severity" onchange="loadFindings()">
+        <option value="">All severities</option>
+        <option value="CRITICAL">Critical</option>
+        <option value="HIGH">High</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="LOW">Low</option>
+      </select>
+      <select id="filter-source" onchange="loadFindings()">
+        <option value="">All sources</option>
+        <option value="HIBP">HIBP</option>
+        <option value="DeHashed">DeHashed</option>
+        <option value="IntelX">IntelX</option>
+        <option value="Pastebin">Pastebin</option>
+        <option value="GitHub">GitHub</option>
+      </select>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Target</th><th>Source</th><th>Type</th><th>Value</th>
+          <th>Severity</th><th>Breach</th><th>First Seen</th>
+        </tr>
+      </thead>
+      <tbody id="findings-body"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- Alerts + Watch Targets -->
+  <div class="two-col">
+    <div class="section">
+      <div class="section-header"><h2>Recent Alerts</h2></div>
+      <table>
+        <thead><tr><th>Time</th><th>Target</th><th>Feed</th><th>Severity</th><th>Message</th></tr></thead>
+        <tbody id="alerts-body"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="section">
+      <div class="section-header"><h2>Watch Targets</h2></div>
+      <table>
+        <thead><tr><th>Target</th><th>Type</th><th>Status</th><th>Last Scanned</th></tr></thead>
+        <tbody id="targets-body"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API = '';
+  let sevChart = null;
+
+  async function get(path) {
+    try {
+      const r = await fetch(API + path);
+      return await r.json();
+    } catch(e) { return null; }
+  }
+
+  async function loadStats() {
+    const d = await get('/api/v1/stats');
+    if (!d) return;
+    document.getElementById('s-total').textContent = d.total_findings;
+    document.getElementById('s-critical').textContent = d.critical;
+    document.getElementById('s-high').textContent = d.high;
+    document.getElementById('s-medium').textContent = d.medium;
+    document.getElementById('s-low').textContent = d.low;
+    document.getElementById('s-targets').textContent = d.active_targets;
+
+    const ctx = document.getElementById('sev-chart').getContext('2d');
+    if (sevChart) sevChart.destroy();
+    sevChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Critical', 'High', 'Medium', 'Low'],
+        datasets: [{
+          data: [d.critical, d.high, d.medium, d.low],
+          backgroundColor: ['#f85149', '#ff8800', '#d29922', '#8b949e'],
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        plugins: { legend: { labels: { color: '#c9d1d9', font: { size: 12 } } } },
+        cutout: '65%',
+      }
+    });
+  }
+
+  async function loadFindings() {
+    const target = document.getElementById('filter-target').value;
+    const severity = document.getElementById('filter-severity').value;
+    const source = document.getElementById('filter-source').value;
+    let url = '/api/v1/findings?limit=200';
+    if (target) url += '&target=' + encodeURIComponent(target);
+    if (severity) url += '&severity=' + severity;
+    if (source) url += '&source=' + source;
+
+    const d = await get(url);
+    const tbody = document.getElementById('findings-body');
+    if (!d || !d.results.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No findings</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.results.map(r => `
+      <tr>
+        <td>${r.target}</td>
+        <td>${r.source_feed}</td>
+        <td><code>${r.exposure_type}</code></td>
+        <td class="trunc" title="${escHtml(r.value || '')}">${escHtml((r.value || '').substring(0,60))}</td>
+        <td><span class="badge badge-${r.severity}">${r.severity}</span></td>
+        <td>${r.breach_name || ''}</td>
+        <td style="color:#8b949e;font-size:12px">${(r.first_seen_at||'').substring(0,19)}</td>
+      </tr>`).join('');
+  }
+
+  async function loadAlerts() {
+    const d = await get('/api/v1/alerts?limit=30');
+    const tbody = document.getElementById('alerts-body');
+    if (!d || !d.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No alerts</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.map(a => `
+      <tr>
+        <td style="color:#8b949e;font-size:12px">${(a.created_at||'').substring(0,19)}</td>
+        <td>${a.target}</td>
+        <td>${a.source_feed}</td>
+        <td><span class="badge badge-${a.severity}">${a.severity}</span></td>
+        <td class="trunc">${escHtml(a.message)}</td>
+      </tr>`).join('');
+  }
+
+  async function loadTargets() {
+    const d = await get('/api/v1/targets');
+    const tbody = document.getElementById('targets-body');
+    if (!d || !d.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No targets</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.map(t => `
+      <tr>
+        <td>${t.target}</td>
+        <td style="color:#8b949e">${t.target_type}</td>
+        <td><span class="source-dot ${t.active ? 'dot-ok' : 'dot-error'}"></span>${t.active ? 'Active' : 'Inactive'}</td>
+        <td style="color:#8b949e;font-size:12px">${t.last_scanned_at ? t.last_scanned_at.substring(0,19) : 'Never'}</td>
+      </tr>`).join('');
+  }
+
+  async function loadSources() {
+    const d = await get('/api/v1/sources');
+    const tbody = document.getElementById('sources-body');
+    if (!d || !d.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No feed data yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.map(f => `
+      <tr>
+        <td>${f.feed_name}</td>
+        <td><span class="source-dot ${f.last_status === 'ok' ? 'dot-ok' : f.last_status === 'error' ? 'dot-error' : 'dot-unknown'}"></span>${f.last_status || 'Unknown'}</td>
+        <td style="color:#8b949e;font-size:12px">${f.last_run_at ? f.last_run_at.substring(0,19) : 'Never'}</td>
+        <td>${f.total_results || 0}</td>
+      </tr>`).join('');
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function loadAll() {
+    await Promise.all([loadStats(), loadFindings(), loadAlerts(), loadTargets(), loadSources()]);
+    document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+  }
+
+  loadAll();
+  setInterval(loadAll, 30000);
+</script>
+</body>
+</html>

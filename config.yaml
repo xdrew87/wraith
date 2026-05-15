@@ -1,0 +1,65 @@
+database:
+  url: ""  # Leave blank for SQLite default (wraith.db). Set DATABASE_URL env var for PostgreSQL.
+  sqlite_path: "wraith.db"
+
+feeds:
+  hibp:
+    enabled: true
+    api_key: ""  # HIBP_API_KEY
+    base_url: "https://haveibeenpwned.com/api/v3"
+    rate_limit: 1  # requests per second (free tier)
+
+  dehashed:
+    enabled: true
+    email: ""  # DEHASHED_EMAIL
+    api_key: ""  # DEHASHED_API_KEY
+    base_url: "https://api.dehashed.com"
+
+  intelx:
+    enabled: true
+    api_key: ""  # INTELX_API_KEY
+    base_url: "https://2.intelx.io"
+
+  pastebin:
+    enabled: true
+    scrape_url: "https://scrape.pastebin.com/api_scraping.php"
+    fetch_url: "https://scrape.pastebin.com/api_scrape_item.php"
+    limit: 100
+
+  github:
+    enabled: true
+    token: ""  # GITHUB_TOKEN
+    base_url: "https://api.github.com"
+    rate_limit: 10
+
+monitor:
+  interval_seconds: 3600  # 1 hour between scans
+  max_concurrent_feeds: 5
+
+alerting:
+  enabled: true
+  min_severity: "MEDIUM"  # Minimum severity to alert on: LOW, MEDIUM, HIGH, CRITICAL
+
+  smtp:
+    enabled: false
+    host: ""  # SMTP_HOST
+    port: 587
+    user: ""  # SMTP_USER
+    password: ""  # SMTP_PASSWORD
+    from_email: ""  # ALERT_FROM_EMAIL
+    to_email: ""  # ALERT_TO_EMAIL
+    use_tls: true
+
+  slack:
+    enabled: false
+    webhook_url: ""  # SLACK_WEBHOOK_URL
+
+  discord:
+    enabled: false
+    webhook_url: ""  # DISCORD_WEBHOOK_URL
+
+logging:
+  level: "INFO"
+  file: "logs/wraith.log"
+  max_bytes: 10485760  # 10MB
+  backup_count: 5
