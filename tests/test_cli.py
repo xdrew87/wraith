@@ -43,7 +43,7 @@ class TestCLI:
                 result = runner.invoke(cli, ["watch", "example.com"])
 
         assert result.exit_code == 0
-        assert "watching" in result.output.lower() or "example.com" in result.output
+        assert "Now watching" in result.output or "Already watching" in result.output
 
     def test_scan_command_no_results(self):
         from cli.commands import cli
