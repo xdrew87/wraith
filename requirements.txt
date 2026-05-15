@@ -8,7 +8,7 @@ rich>=13.0.0
 aiofiles>=23.0.0
 pytest>=9.0.3
 pytest-asyncio>=0.23.0
-pytest-mock>=3.12.0
+pytest-mock>=3.15.1
 
 # Dashboard
 flask>=3.0.0
