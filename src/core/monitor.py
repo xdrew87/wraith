@@ -1,8 +1,9 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
-from core.database import WatchTarget, get_db
+from alerting.notifier import queue_alerts
+from core.database import WatchTarget, db_session
 from core.aggregator import aggregate
 
 logger = logging.getLogger(__name__)
@@ -11,35 +12,37 @@ logger = logging.getLogger(__name__)
 async def monitor_loop(config: dict) -> None:
     """Continuously scan all active watch targets on the configured interval."""
     interval = config.get("monitor", {}).get("interval_seconds", 3600)
-    logger.info(f"Monitor daemon started — scan interval: {interval}s")
+    logger.info("Monitor daemon started — scan interval: %ds", interval)
 
     while True:
         await run_scan_cycle(config)
-        logger.info(f"Next scan in {interval}s")
+        logger.info("Next scan in %ds", interval)
         await asyncio.sleep(interval)
 
 
 async def run_scan_cycle(config: dict) -> None:
     """Run one full cycle — scan all active watch targets."""
-    db = get_db()
-    try:
+    with db_session() as db:
         targets = db.query(WatchTarget).filter_by(active=True).all()
-        if not targets:
-            logger.info("No active watch targets")
-            return
+        # Copy data before session closes
+        target_list = [(wt.id, wt.target) for wt in targets]
 
-        logger.info(f"Scanning {len(targets)} watch target(s)")
-        for wt in targets:
-            try:
-                results = await aggregate(wt.target, config)
-                wt.last_scanned_at = datetime.utcnow()
-                db.commit()
+    if not target_list:
+        logger.info("No active watch targets")
+        return
 
-                # Queue alerts for new findings
-                from alerting.notifier import queue_alerts
-                await queue_alerts(wt.target, results, config)
+    logger.info("Scanning %d watch target(s)", len(target_list))
+    for wt_id, wt_target in target_list:
+        try:
+            results = await aggregate(wt_target, config)
 
-            except Exception as e:
-                logger.error(f"Error scanning {wt.target}: {e}")
-    finally:
-        db.close()
+            with db_session() as db:
+                wt = db.query(WatchTarget).filter_by(id=wt_id).first()
+                if wt:
+                    wt.last_scanned_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                    db.commit()
+
+            await queue_alerts(wt_target, results, config)
+
+        except Exception as e:
+            logger.error("Error scanning %s: %s", wt_target, e)

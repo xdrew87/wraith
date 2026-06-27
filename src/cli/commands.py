@@ -6,10 +6,12 @@ from typing import Optional
 
 import click
 from rich.console import Console
+from rich.table import Table
+from rich import box
 
 from core.config import load_config, setup_logging
 from core.database import init_db, get_db, WatchTarget, ExposedCredential, Alert
-from core.aggregator import aggregate
+from core.aggregator import aggregate, detect_target_type
 from core.reporter import render_table, to_json, to_csv
 
 console = Console()
@@ -90,7 +92,6 @@ def watch(ctx: click.Context, target: str) -> None:
     config = ctx.obj["config"]
     init_db(config)
 
-    from core.aggregator import detect_target_type
     target_type = detect_target_type(target)
 
     db = get_db()
@@ -201,9 +202,6 @@ def alerts(ctx: click.Context, limit: int) -> None:
         console.print("[dim]No alerts.[/dim]")
         return
 
-    from rich.table import Table
-    from rich import box
-
     table = Table(title="WRAITH Alerts", box=box.ROUNDED)
     table.add_column("Time", style="dim")
     table.add_column("Target", style="cyan")
@@ -212,7 +210,9 @@ def alerts(ctx: click.Context, limit: int) -> None:
     table.add_column("Message")
 
     for a in rows:
-        sev_color = {"CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "dim"}.get(a.severity, "white")
+        sev_color = {
+            "CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "dim"
+        }.get(a.severity, "white")
         table.add_row(
             str(a.created_at)[:19],
             a.target,
@@ -225,15 +225,35 @@ def alerts(ctx: click.Context, limit: int) -> None:
 
 
 @cli.command()
-@click.option("--port", default=5050, help="Port to run the dashboard on")
 @click.pass_context
-def dashboard(ctx: click.Context, port: int) -> None:
+def monitor(ctx: click.Context) -> None:
+    """Run the continuous monitoring daemon — scans all active watch targets on interval."""
+    from core.monitor import monitor_loop
+
+    config = ctx.obj["config"]
+    init_db(config)
+
+    interval = config.get("monitor", {}).get("interval_seconds", 3600)
+    console.print(f"[cyan]Starting WRAITH monitor daemon (interval: {interval}s)[/cyan]")
+    console.print("[dim]Press Ctrl+C to stop[/dim]")
+
+    try:
+        asyncio.run(monitor_loop(config))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Monitor daemon stopped.[/yellow]")
+
+
+@cli.command()
+@click.option("--port", default=5050, help="Port to run the dashboard on")
+@click.option("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
+@click.pass_context
+def dashboard(ctx: click.Context, port: int, host: str) -> None:
     """Launch the WRAITH web dashboard."""
     config = ctx.obj["config"]
     init_db(config)
 
-    console.print(f"[cyan]Starting WRAITH dashboard on http://localhost:{port}[/cyan]")
+    console.print(f"[cyan]Starting WRAITH dashboard on http://{host}:{port}[/cyan]")
 
-    dashboard_app = Path(__file__).resolve().parents[2] / "dashboard" / "backend" / "app.py"
+    dashboard_app_path = Path(__file__).resolve().parents[2] / "dashboard" / "backend" / "app.py"
     import subprocess
-    subprocess.run([sys.executable, str(dashboard_app), "--port", str(port)])
+    subprocess.run([sys.executable, str(dashboard_app_path), "--port", str(port), "--host", host])

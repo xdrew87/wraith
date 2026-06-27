@@ -58,6 +58,10 @@ alerting:
     enabled: false
     webhook_url: ""  # DISCORD_WEBHOOK_URL
 
+dashboard:
+  secret_key: ""  # DASHBOARD_SECRET_KEY — set for production
+  allowed_origins: ""  # DASHBOARD_ALLOWED_ORIGINS — comma-separated. Default: http://localhost:5050
+
 logging:
   level: "INFO"
   file: "logs/wraith.log"

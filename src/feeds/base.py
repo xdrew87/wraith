@@ -28,7 +28,11 @@ class BaseFeed:
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(timeout=DEFAULT_TIMEOUT)
+            connector = aiohttp.TCPConnector(ssl=True)
+            self._session = aiohttp.ClientSession(
+                timeout=DEFAULT_TIMEOUT,
+                connector=connector,
+            )
         return self._session
 
     async def close(self) -> None:
@@ -58,11 +62,15 @@ class BaseFeed:
             while attempt < retries:
                 try:
                     async with session.request(
-                        method, url, headers=headers, params=params, json=json_data, ssl=True
+                        method, url, headers=headers, params=params, json=json_data
                     ) as resp:
                         if resp.status == 429:
-                            retry_after = float(resp.headers.get("Retry-After", DEFAULT_BACKOFF * (attempt + 1)))
-                            logger.warning(f"[{self.name}] Rate limited. Waiting {retry_after}s")
+                            retry_after = float(
+                                resp.headers.get("Retry-After", DEFAULT_BACKOFF * (attempt + 1))
+                            )
+                            logger.warning(
+                                "[%s] Rate limited. Waiting %.1fs", self.name, retry_after
+                            )
                             await asyncio.sleep(retry_after)
                             attempt += 1
                             continue
@@ -72,26 +80,27 @@ class BaseFeed:
 
                         if resp.status >= 400:
                             text = await resp.text()
-                            logger.error(f"[{self.name}] HTTP {resp.status}: {text[:200]}")
+                            logger.error(
+                                "[%s] HTTP %d: %s", self.name, resp.status, text[:200]
+                            )
                             return {}
 
                         content_type = resp.content_type or ""
                         if "json" in content_type:
                             return await resp.json()
-                        else:
-                            return {"_text": await resp.text()}
+                        return {"_text": await resp.text()}
 
                 except asyncio.TimeoutError:
                     last_error = "Timeout"
-                    logger.warning(f"[{self.name}] Timeout on attempt {attempt + 1}")
+                    logger.warning("[%s] Timeout on attempt %d", self.name, attempt + 1)
                 except aiohttp.ClientError as e:
                     last_error = str(e)
-                    logger.warning(f"[{self.name}] Client error on attempt {attempt + 1}: {e}")
+                    logger.warning("[%s] Client error on attempt %d: %s", self.name, attempt + 1, e)
 
                 attempt += 1
                 await asyncio.sleep(DEFAULT_BACKOFF * attempt)
 
-        logger.error(f"[{self.name}] All {retries} attempts failed. Last error: {last_error}")
+        logger.error("[%s] All %d attempts failed. Last error: %s", self.name, retries, last_error)
         return {}
 
     def make_result(

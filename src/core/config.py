@@ -24,6 +24,8 @@ ENV_OVERRIDES = {
     "alerting.smtp.to_email": "ALERT_TO_EMAIL",
     "alerting.slack.webhook_url": "SLACK_WEBHOOK_URL",
     "alerting.discord.webhook_url": "DISCORD_WEBHOOK_URL",
+    "dashboard.secret_key": "DASHBOARD_SECRET_KEY",
+    "dashboard.allowed_origins": "DASHBOARD_ALLOWED_ORIGINS",
 }
 
 
@@ -58,6 +60,20 @@ def load_config(config_path: str = None) -> dict:
     return config
 
 
+def _mask_url(url: str) -> str:
+    """Replace credentials in a DB URL with asterisks for safe logging."""
+    if not url or "@" not in url:
+        return url
+    scheme_rest = url.split("://", 1)
+    if len(scheme_rest) != 2:
+        return url
+    scheme, rest = scheme_rest
+    creds_host = rest.split("@", 1)
+    if len(creds_host) != 2:
+        return url
+    return f"{scheme}://***:***@{creds_host[1]}"
+
+
 def setup_logging(config: dict) -> None:
     log_cfg = config.get("logging", {})
     level = getattr(logging, log_cfg.get("level", "INFO").upper(), logging.INFO)
@@ -67,17 +83,22 @@ def setup_logging(config: dict) -> None:
 
     Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
-    formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    )
 
     root = logging.getLogger()
     root.setLevel(level)
 
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    root.addHandler(console)
+    # Avoid duplicate handlers when setup_logging is called more than once
+    if not root.handlers:
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        root.addHandler(console)
 
-    rotating = logging.handlers.RotatingFileHandler(
-        log_file, maxBytes=max_bytes, backupCount=backup_count
-    )
-    rotating.setFormatter(formatter)
-    root.addHandler(rotating)
+        rotating = logging.handlers.RotatingFileHandler(
+            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+        )
+        rotating.setFormatter(formatter)
+        root.addHandler(rotating)

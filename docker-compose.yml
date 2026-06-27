@@ -1,0 +1,38 @@
+services:
+  wraith:
+    build: .
+    container_name: wraith
+    restart: unless-stopped
+    ports:
+      - "5050:5050"
+    volumes:
+      - wraith-data:/app/wraith.db
+      - wraith-logs:/app/logs
+      - wraith-outputs:/app/outputs
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - HIBP_API_KEY=${HIBP_API_KEY:-}
+      - DEHASHED_EMAIL=${DEHASHED_EMAIL:-}
+      - DEHASHED_API_KEY=${DEHASHED_API_KEY:-}
+      - INTELX_API_KEY=${INTELX_API_KEY:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - ALERT_FROM_EMAIL=${ALERT_FROM_EMAIL:-}
+      - ALERT_TO_EMAIL=${ALERT_TO_EMAIL:-}
+      - DASHBOARD_ALLOWED_ORIGINS=${DASHBOARD_ALLOWED_ORIGINS:-http://localhost:5050}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5050/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  wraith-data:
+  wraith-logs:
+  wraith-outputs:

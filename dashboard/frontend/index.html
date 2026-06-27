@@ -7,327 +7,1147 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #0d0f14; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
-    a { color: #58a6ff; text-decoration: none; }
 
+    :root {
+      --bg-primary: #0d0f14;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #1c2128;
+      --border: #30363d;
+      --border-subtle: #21262d;
+      --text-primary: #e6edf3;
+      --text-secondary: #c9d1d9;
+      --text-muted: #8b949e;
+      --accent: #00d4ff;
+      --link: #58a6ff;
+      --sev-critical: #f85149;
+      --sev-high: #ff8800;
+      --sev-medium: #d29922;
+      --sev-low: #8b949e;
+      --success: #3fb950;
+      --danger: #f85149;
+      --radius: 8px;
+      --radius-sm: 5px;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    a { color: var(--link); text-decoration: none; }
+
+    /* ===== HEADER ===== */
     header {
-      background: #161b22;
-      border-bottom: 1px solid #30363d;
-      padding: 14px 24px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
       display: flex;
       align-items: center;
+      height: 56px;
       gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    header h1 { font-size: 18px; color: #00d4ff; letter-spacing: 3px; font-weight: 700; }
-    header span { font-size: 12px; color: #8b949e; margin-left: auto; }
+    .logo {
+      font-size: 18px;
+      color: var(--accent);
+      letter-spacing: 3px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .logo-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+    /* ===== NAV TABS ===== */
+    nav {
+      display: flex;
+      gap: 2px;
+      margin-left: 24px;
+    }
+    .nav-tab {
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border: none;
+      background: none;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-tab:hover { color: var(--text-primary); background: var(--bg-tertiary); }
+    .nav-tab.active { color: var(--accent); background: rgba(0,212,255,0.1); }
 
+    .header-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #last-updated { font-size: 11px; color: var(--text-muted); }
+
+    /* ===== CONTAINER ===== */
+    .container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+    /* ===== TAB PANELS ===== */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ===== STAT CARDS ===== */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
       gap: 12px;
       margin-bottom: 24px;
     }
     .stat-card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      padding: 16px;
-      text-align: center;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      position: relative;
+      overflow: hidden;
     }
-    .stat-card .value { font-size: 28px; font-weight: 700; }
-    .stat-card .label { font-size: 11px; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
-    .stat-card.critical .value { color: #f85149; }
-    .stat-card.high .value { color: #ff8800; }
-    .stat-card.medium .value { color: #d29922; }
-    .stat-card.low .value { color: #8b949e; }
-    .stat-card.targets .value { color: #58a6ff; }
-    .stat-card.total .value { color: #00d4ff; }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .stat-card.total::before { background: var(--accent); }
+    .stat-card.critical::before { background: var(--sev-critical); }
+    .stat-card.high::before { background: var(--sev-high); }
+    .stat-card.medium::before { background: var(--sev-medium); }
+    .stat-card.low::before { background: var(--sev-low); }
+    .stat-card.targets::before { background: var(--link); }
+    .stat-card.alerts::before { background: #a371f7; }
 
-    .section { background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 20px; }
+    .stat-value { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+    .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+    .stat-card.total .stat-value { color: var(--accent); }
+    .stat-card.critical .stat-value { color: var(--sev-critical); }
+    .stat-card.high .stat-value { color: var(--sev-high); }
+    .stat-card.medium .stat-value { color: var(--sev-medium); }
+    .stat-card.low .stat-value { color: var(--sev-low); }
+    .stat-card.targets .stat-value { color: var(--link); }
+    .stat-card.alerts .stat-value { color: #a371f7; }
+
+    /* ===== SECTION CARD ===== */
+    .section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
     .section-header {
       padding: 12px 16px;
-      border-bottom: 1px solid #30363d;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
+      min-height: 48px;
     }
-    .section-header h2 { font-size: 14px; color: #e6edf3; font-weight: 600; margin-right: auto; }
+    .section-header h2 {
+      font-size: 13px;
+      color: var(--text-primary);
+      font-weight: 600;
+      margin-right: auto;
+      white-space: nowrap;
+    }
 
-    input[type=text], select {
-      background: #0d0f14;
-      border: 1px solid #30363d;
-      color: #c9d1d9;
+    /* ===== INPUTS ===== */
+    input[type=text], select, textarea {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
       padding: 5px 10px;
-      border-radius: 5px;
+      border-radius: var(--radius-sm);
       font-size: 12px;
       outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
     }
-    input[type=text]:focus, select:focus { border-color: #58a6ff; }
+    input[type=text]:focus, select:focus, textarea:focus {
+      border-color: var(--link);
+      box-shadow: 0 0 0 2px rgba(88,166,255,0.15);
+    }
 
+    /* ===== BUTTONS ===== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .btn:hover { background: var(--border); color: var(--text-primary); }
+    .btn-primary {
+      background: rgba(0,212,255,0.12);
+      border-color: rgba(0,212,255,0.3);
+      color: var(--accent);
+    }
+    .btn-primary:hover { background: rgba(0,212,255,0.2); }
+    .btn-danger { background: rgba(248,81,73,0.1); border-color: rgba(248,81,73,0.3); color: var(--sev-critical); }
+    .btn-danger:hover { background: rgba(248,81,73,0.2); }
+    .btn-sm { padding: 3px 8px; font-size: 11px; }
+    .btn-icon { padding: 5px 8px; }
+
+    /* ===== TABLE ===== */
     table { width: 100%; border-collapse: collapse; }
-    th { padding: 8px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.5px; border-bottom: 1px solid #21262d; }
-    td { padding: 8px 12px; border-bottom: 1px solid #21262d; font-size: 13px; vertical-align: top; }
+    th {
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 13px;
+      vertical-align: middle;
+    }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #1c2128; }
+    tbody tr:hover td { background: var(--bg-tertiary); cursor: pointer; }
+    .no-hover tbody tr:hover td { background: transparent; cursor: default; }
 
+    /* ===== BADGES ===== */
     .badge {
       display: inline-block;
       padding: 2px 8px;
       border-radius: 10px;
       font-size: 11px;
       font-weight: 600;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
     }
-    .badge-CRITICAL { background: rgba(248,81,73,0.2); color: #f85149; border: 1px solid rgba(248,81,73,0.4); }
-    .badge-HIGH { background: rgba(255,136,0,0.15); color: #ff8800; border: 1px solid rgba(255,136,0,0.3); }
-    .badge-MEDIUM { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
-    .badge-LOW { background: rgba(139,148,158,0.1); color: #8b949e; border: 1px solid #30363d; }
+    .badge-CRITICAL { background: rgba(248,81,73,0.15); color: var(--sev-critical); border: 1px solid rgba(248,81,73,0.35); }
+    .badge-HIGH { background: rgba(255,136,0,0.12); color: var(--sev-high); border: 1px solid rgba(255,136,0,0.3); }
+    .badge-MEDIUM { background: rgba(210,153,34,0.12); color: var(--sev-medium); border: 1px solid rgba(210,153,34,0.3); }
+    .badge-LOW { background: rgba(139,148,158,0.08); color: var(--sev-low); border: 1px solid var(--border); }
 
-    .source-dot {
+    /* ===== STATUS DOTS ===== */
+    .dot {
       display: inline-block;
-      width: 8px; height: 8px;
+      width: 7px; height: 7px;
       border-radius: 50%;
       margin-right: 5px;
+      flex-shrink: 0;
     }
-    .dot-ok { background: #3fb950; }
-    .dot-error { background: #f85149; }
-    .dot-unknown { background: #8b949e; }
+    .dot-ok { background: var(--success); box-shadow: 0 0 4px var(--success); }
+    .dot-error { background: var(--danger); }
+    .dot-unknown { background: var(--text-muted); }
 
-    .refresh-btn {
-      background: #21262d;
-      border: 1px solid #30363d;
-      color: #c9d1d9;
-      padding: 5px 12px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 12px;
+    /* ===== EMPTY STATE ===== */
+    .empty {
+      padding: 40px 24px;
+      text-align: center;
+      color: var(--text-muted);
     }
-    .refresh-btn:hover { background: #30363d; }
+    .empty-icon { font-size: 28px; margin-bottom: 8px; }
+    .empty-title { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
+    .empty-sub { font-size: 12px; }
 
-    .empty { padding: 24px; text-align: center; color: #8b949e; font-size: 13px; }
-    .trunc { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* ===== SKELETON LOADER ===== */
+    .skel {
+      background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-subtle) 50%, var(--bg-tertiary) 75%);
+      background-size: 400% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 4px;
+      height: 14px;
+      display: inline-block;
+    }
+    @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
+    /* ===== TRUNCATION ===== */
+    .trunc { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mono { font-family: 'Consolas', 'SF Mono', monospace; font-size: 12px; }
+
+    /* ===== GRID ===== */
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 960px) { .two-col { grid-template-columns: 1fr; } }
 
-    #last-updated { font-size: 11px; color: #8b949e; }
+    /* ===== PAGINATION ===== */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .page-btns { display: flex; gap: 4px; }
+
+    /* ===== FILTER BAR ===== */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .saved-searches-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      min-height: 40px;
+      align-items: center;
+    }
+    .saved-search-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px 2px 10px;
+      background: rgba(88,166,255,0.1);
+      border: 1px solid rgba(88,166,255,0.25);
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--link);
+      cursor: pointer;
+    }
+    .saved-search-chip:hover { background: rgba(88,166,255,0.18); }
+    .chip-del {
+      margin-left: 2px;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .chip-del:hover { color: var(--sev-critical); }
+
+    /* ===== MODAL ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 640px;
+      max-width: 95vw;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-header h3 { font-size: 15px; color: var(--text-primary); margin-right: auto; }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field-label { font-size: 10px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.8px; }
+    .field-value { font-size: 13px; color: var(--text-secondary); word-break: break-all; }
+
+    /* ===== NOTES ===== */
+    .notes-section { margin-top: 16px; }
+    .notes-section h4 { font-size: 12px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.8px; margin-bottom: 10px; }
+    .note-item {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      position: relative;
+    }
+    .note-item .note-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+    .note-del { position: absolute; top: 8px; right: 8px; }
+    .note-add { width: 100%; margin-top: 8px; }
+    textarea.note-input { width: 100%; min-height: 72px; resize: vertical; padding: 8px 10px; }
+
+    /* ===== RISK BAR ===== */
+    .risk-bar-wrap { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .risk-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+
+    /* ===== TOAST ===== */
+    #toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--text-primary);
+      min-width: 200px;
+      animation: toastIn 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .toast.success { border-left: 3px solid var(--success); }
+    .toast.error { border-left: 3px solid var(--sev-critical); }
+    .toast.info { border-left: 3px solid var(--link); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    /* ===== MISC ===== */
+    .text-muted { color: var(--text-muted); }
+    .text-sm { font-size: 12px; }
+    .gap-r { margin-right: auto; }
   </style>
 </head>
 <body>
+
+<!-- HEADER -->
 <header>
-  <h1>⚡ WRAITH</h1>
-  <span style="color:#8b949e">Credential Exposure Monitor</span>
-  <span id="last-updated">Loading...</span>
-  <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+  <span class="logo">⚡ WRAITH</span>
+  <span class="logo-sub">Credential Monitor</span>
+  <nav>
+    <button class="nav-tab active" onclick="showTab('overview')">Overview</button>
+    <button class="nav-tab" onclick="showTab('findings')">Findings</button>
+    <button class="nav-tab" onclick="showTab('alerts')">Alerts</button>
+    <button class="nav-tab" onclick="showTab('targets')">Targets</button>
+    <button class="nav-tab" onclick="showTab('timeline')">Timeline</button>
+  </nav>
+  <div class="header-right">
+    <span id="last-updated" class="text-muted text-sm">—</span>
+    <button class="btn" onclick="loadAll()">↻ Refresh</button>
+  </div>
 </header>
 
 <div class="container">
-  <!-- Stats -->
-  <div class="stats-grid" id="stats-grid">
-    <div class="stat-card total"><div class="value" id="s-total">—</div><div class="label">Total Findings</div></div>
-    <div class="stat-card critical"><div class="value" id="s-critical">—</div><div class="label">Critical</div></div>
-    <div class="stat-card high"><div class="value" id="s-high">—</div><div class="label">High</div></div>
-    <div class="stat-card medium"><div class="value" id="s-medium">—</div><div class="label">Medium</div></div>
-    <div class="stat-card low"><div class="value" id="s-low">—</div><div class="label">Low</div></div>
-    <div class="stat-card targets"><div class="value" id="s-targets">—</div><div class="label">Watch Targets</div></div>
+
+  <!-- ===== OVERVIEW TAB ===== -->
+  <div id="tab-overview" class="tab-panel active">
+    <div class="stats-grid">
+      <div class="stat-card total"><div class="stat-value" id="s-total">—</div><div class="stat-label">Total Findings</div></div>
+      <div class="stat-card critical"><div class="stat-value" id="s-critical">—</div><div class="stat-label">Critical</div></div>
+      <div class="stat-card high"><div class="stat-value" id="s-high">—</div><div class="stat-label">High</div></div>
+      <div class="stat-card medium"><div class="stat-value" id="s-medium">—</div><div class="stat-label">Medium</div></div>
+      <div class="stat-card low"><div class="stat-value" id="s-low">—</div><div class="stat-label">Low</div></div>
+      <div class="stat-card targets"><div class="stat-value" id="s-targets">—</div><div class="stat-label">Watch Targets</div></div>
+      <div class="stat-card alerts"><div class="stat-value" id="s-alerts">—</div><div class="stat-label">Pending Alerts</div></div>
+    </div>
+
+    <div class="two-col">
+      <div class="section">
+        <div class="section-header"><h2>Severity Distribution</h2></div>
+        <div style="padding:16px;max-height:240px"><canvas id="sev-chart"></canvas></div>
+      </div>
+      <div class="section">
+        <div class="section-header"><h2>Feed Status</h2></div>
+        <table class="no-hover">
+          <thead><tr><th>Feed</th><th>Status</th><th>Last Run</th><th>Results</th></tr></thead>
+          <tbody id="sources-body"><tr><td colspan="4"><div class="empty"><div class="empty-icon">⚙</div><div class="empty-title">Loading feed status…</div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="section">
+        <div class="section-header"><h2>Risk by Target</h2></div>
+        <table class="no-hover" id="risk-table">
+          <thead><tr><th>Target</th><th>Risk Score</th><th>Findings</th></tr></thead>
+          <tbody id="risk-body"><tr><td colspan="3"><div class="empty"><div class="empty-icon">🛡</div><div class="empty-title">Loading risk data…</div></div></td></tr></tbody>
+        </table>
+      </div>
+      <div class="section">
+        <div class="section-header"><h2>Recent Alerts</h2></div>
+        <table>
+          <thead><tr><th>Time</th><th>Target</th><th>Severity</th><th>Message</th></tr></thead>
+          <tbody id="ov-alerts-body"><tr><td colspan="4"><div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">Loading alerts…</div></div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
-  <!-- Chart + Sources -->
-  <div class="two-col">
+  <!-- ===== FINDINGS TAB ===== -->
+  <div id="tab-findings" class="tab-panel">
     <div class="section">
-      <div class="section-header"><h2>Severity Distribution</h2></div>
-      <div style="padding:16px;max-height:220px"><canvas id="sev-chart"></canvas></div>
-    </div>
-    <div class="section">
-      <div class="section-header"><h2>Feed Status</h2></div>
+      <div class="section-header">
+        <h2>Findings</h2>
+        <div class="filter-bar">
+          <input type="text" id="f-search" placeholder="Search…" style="width:180px" oninput="debouncedLoadFindings()" />
+          <select id="f-severity" onchange="loadFindings()">
+            <option value="">All severities</option>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+          <select id="f-source" onchange="loadFindings()">
+            <option value="">All sources</option>
+            <option value="HIBP">HIBP</option>
+            <option value="DeHashed">DeHashed</option>
+            <option value="IntelX">IntelX</option>
+            <option value="Pastebin">Pastebin</option>
+            <option value="GitHub">GitHub</option>
+          </select>
+          <button class="btn" onclick="saveCurrentSearch()">⭐ Save Search</button>
+          <button class="btn" onclick="exportFindings('csv')">↓ CSV</button>
+          <button class="btn" onclick="exportFindings('json')">↓ JSON</button>
+        </div>
+      </div>
+      <div id="saved-searches-bar" class="saved-searches-bar" style="display:none"></div>
       <table>
-        <thead><tr><th>Feed</th><th>Status</th><th>Last Run</th><th>Results</th></tr></thead>
-        <tbody id="sources-body"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Target</th><th>Source</th><th>Type</th><th>Value</th>
+            <th>Severity</th><th>Breach</th><th>First Seen</th>
+          </tr>
+        </thead>
+        <tbody id="findings-body"></tbody>
+      </table>
+      <div class="pagination">
+        <span id="findings-info" class="text-muted">—</span>
+        <div class="page-btns">
+          <button class="btn btn-sm" id="btn-prev" onclick="findingsPage(-1)" disabled>‹ Prev</button>
+          <button class="btn btn-sm" id="btn-next" onclick="findingsPage(1)" disabled>Next ›</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ALERTS TAB ===== -->
+  <div id="tab-alerts" class="tab-panel">
+    <div class="section">
+      <div class="section-header"><h2>Alerts</h2></div>
+      <table class="no-hover">
+        <thead><tr><th>Time</th><th>Target</th><th>Feed</th><th>Severity</th><th>Message</th><th>Sent</th></tr></thead>
+        <tbody id="alerts-body"></tbody>
       </table>
     </div>
   </div>
 
-  <!-- Findings -->
-  <div class="section">
-    <div class="section-header">
-      <h2>Findings</h2>
-      <input type="text" id="filter-target" placeholder="Filter by target..." oninput="loadFindings()" style="width:180px" />
-      <select id="filter-severity" onchange="loadFindings()">
-        <option value="">All severities</option>
-        <option value="CRITICAL">Critical</option>
-        <option value="HIGH">High</option>
-        <option value="MEDIUM">Medium</option>
-        <option value="LOW">Low</option>
-      </select>
-      <select id="filter-source" onchange="loadFindings()">
-        <option value="">All sources</option>
-        <option value="HIBP">HIBP</option>
-        <option value="DeHashed">DeHashed</option>
-        <option value="IntelX">IntelX</option>
-        <option value="Pastebin">Pastebin</option>
-        <option value="GitHub">GitHub</option>
-      </select>
+  <!-- ===== TARGETS TAB ===== -->
+  <div id="tab-targets" class="tab-panel">
+    <div class="section">
+      <div class="section-header">
+        <h2>Watch Targets</h2>
+        <input type="text" id="new-target-input" placeholder="domain.com or user@domain.com" style="width:240px" />
+        <button class="btn btn-primary" onclick="addTarget()">+ Add Target</button>
+      </div>
+      <table class="no-hover">
+        <thead><tr><th>Target</th><th>Type</th><th>Status</th><th>Last Scanned</th><th>Action</th></tr></thead>
+        <tbody id="targets-body"></tbody>
+      </table>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Target</th><th>Source</th><th>Type</th><th>Value</th>
-          <th>Severity</th><th>Breach</th><th>First Seen</th>
-        </tr>
-      </thead>
-      <tbody id="findings-body"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
-    </table>
   </div>
 
-  <!-- Alerts + Watch Targets -->
-  <div class="two-col">
+  <!-- ===== TIMELINE TAB ===== -->
+  <div id="tab-timeline" class="tab-panel">
     <div class="section">
-      <div class="section-header"><h2>Recent Alerts</h2></div>
-      <table>
-        <thead><tr><th>Time</th><th>Target</th><th>Feed</th><th>Severity</th><th>Message</th></tr></thead>
-        <tbody id="alerts-body"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
-      </table>
+      <div class="section-header">
+        <h2>Findings Timeline</h2>
+        <select id="tl-days" onchange="loadTimeline()">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+        <input type="text" id="tl-target" placeholder="Filter by target…" style="width:200px" oninput="debouncedLoadTimeline()" />
+      </div>
+      <div style="padding:20px;height:320px"><canvas id="timeline-chart"></canvas></div>
     </div>
-    <div class="section">
-      <div class="section-header"><h2>Watch Targets</h2></div>
-      <table>
-        <thead><tr><th>Target</th><th>Type</th><th>Status</th><th>Last Scanned</th></tr></thead>
-        <tbody id="targets-body"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody>
-      </table>
+  </div>
+
+</div><!-- /container -->
+
+<!-- FINDING DETAIL MODAL -->
+<div id="detail-modal" class="modal-overlay" onclick="closeModalOnOverlay(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Finding Detail</h3>
+      <span id="modal-severity"></span>
+      <button class="btn btn-sm btn-icon" onclick="closeModal()">✕</button>
     </div>
+    <div class="modal-body" id="modal-body"></div>
   </div>
 </div>
 
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
 <script>
-  const API = '';
-  let sevChart = null;
+'use strict';
 
-  async function get(path) {
-    try {
-      const r = await fetch(API + path);
-      return await r.json();
-    } catch(e) { return null; }
+// ===== STATE =====
+let _findingsPage = 0;
+const FINDINGS_PAGE_SIZE = 50;
+let _findingsTotal = 0;
+let _sevChart = null;
+let _tlChart = null;
+let _savedSearches = [];
+let _debounceTimer = null;
+let _tlDebounceTimer = null;
+
+// ===== UTILITIES =====
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fmtDt(s) {
+  return s ? escHtml(String(s).substring(0, 19)) : '<span class="text-muted">—</span>';
+}
+
+function severityBadge(sev) {
+  const s = ['CRITICAL','HIGH','MEDIUM','LOW'].includes(sev) ? sev : 'LOW';
+  return `<span class="badge badge-${s}">${escHtml(s)}</span>`;
+}
+
+function statusDot(status) {
+  const cls = status === 'ok' ? 'dot-ok' : status === 'error' ? 'dot-error' : 'dot-unknown';
+  return `<span class="dot ${cls}"></span>${escHtml(status || 'Unknown')}`;
+}
+
+function toast(msg, type = 'info') {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function riskColor(score) {
+  if (score >= 80) return 'var(--sev-critical)';
+  if (score >= 50) return 'var(--sev-high)';
+  if (score >= 20) return 'var(--sev-medium)';
+  return 'var(--sev-low)';
+}
+
+// ===== TAB NAVIGATION =====
+function showTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'findings') { loadFindings(); loadSavedSearches(); }
+  if (id === 'timeline') loadTimeline();
+  if (id === 'targets') loadTargets();
+  if (id === 'alerts') loadAlerts();
+}
+
+// ===== API =====
+async function api(path) {
+  try {
+    const r = await fetch(path);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    console.error('API error', path, e);
+    return null;
   }
+}
 
-  async function loadStats() {
-    const d = await get('/api/v1/stats');
-    if (!d) return;
-    document.getElementById('s-total').textContent = d.total_findings;
-    document.getElementById('s-critical').textContent = d.critical;
-    document.getElementById('s-high').textContent = d.high;
-    document.getElementById('s-medium').textContent = d.medium;
-    document.getElementById('s-low').textContent = d.low;
-    document.getElementById('s-targets').textContent = d.active_targets;
-
-    const ctx = document.getElementById('sev-chart').getContext('2d');
-    if (sevChart) sevChart.destroy();
-    sevChart = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: ['Critical', 'High', 'Medium', 'Low'],
-        datasets: [{
-          data: [d.critical, d.high, d.medium, d.low],
-          backgroundColor: ['#f85149', '#ff8800', '#d29922', '#8b949e'],
-          borderWidth: 0,
-        }]
-      },
-      options: {
-        plugins: { legend: { labels: { color: '#c9d1d9', font: { size: 12 } } } },
-        cutout: '65%',
-      }
+async function apiPost(path, body) {
+  try {
+    const r = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
     });
+    return await r.json();
+  } catch (e) {
+    console.error('API POST error', path, e);
+    return null;
+  }
+}
+
+async function apiDelete(path) {
+  try {
+    const r = await fetch(path, { method: 'DELETE' });
+    return await r.json();
+  } catch (e) {
+    console.error('API DELETE error', path, e);
+    return null;
+  }
+}
+
+// ===== STATS =====
+async function loadStats() {
+  const d = await api('/api/v1/stats');
+  if (!d) return;
+  document.getElementById('s-total').textContent = d.total_findings ?? '—';
+  document.getElementById('s-critical').textContent = d.critical ?? '—';
+  document.getElementById('s-high').textContent = d.high ?? '—';
+  document.getElementById('s-medium').textContent = d.medium ?? '—';
+  document.getElementById('s-low').textContent = d.low ?? '—';
+  document.getElementById('s-targets').textContent = d.active_targets ?? '—';
+  document.getElementById('s-alerts').textContent = d.pending_alerts ?? '—';
+
+  const ctx = document.getElementById('sev-chart').getContext('2d');
+  if (_sevChart) _sevChart.destroy();
+  _sevChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Critical', 'High', 'Medium', 'Low'],
+      datasets: [{
+        data: [d.critical, d.high, d.medium, d.low],
+        backgroundColor: ['#f85149','#ff8800','#d29922','#8b949e'],
+        borderWidth: 0,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { labels: { color: '#c9d1d9', font: { size: 12 }, padding: 16 } }
+      },
+      cutout: '68%',
+      animation: { duration: 400 },
+    }
+  });
+}
+
+// ===== SOURCES =====
+async function loadSources() {
+  const d = await api('/api/v1/sources');
+  const tbody = document.getElementById('sources-body');
+  if (!d || !d.length) {
+    tbody.innerHTML = '<tr><td colspan="4"><div class="empty"><div class="empty-icon">⚙</div><div class="empty-title">No feed data yet</div><div class="empty-sub">Run a scan to populate feed status</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.map(f => `
+    <tr>
+      <td><strong>${escHtml(f.feed_name)}</strong></td>
+      <td>${statusDot(f.last_status)}</td>
+      <td class="text-muted text-sm">${fmtDt(f.last_run_at)}</td>
+      <td>${escHtml(String(f.total_results || 0))}</td>
+    </tr>`).join('');
+}
+
+// ===== RISK =====
+async function loadRisk() {
+  const d = await api('/api/v1/risk');
+  const tbody = document.getElementById('risk-body');
+  if (!d || !d.length) {
+    tbody.innerHTML = '<tr><td colspan="3"><div class="empty"><div class="empty-icon">🛡</div><div class="empty-title">No risk data</div><div class="empty-sub">Add watch targets and run a scan</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.slice(0, 8).map(r => {
+    const color = riskColor(r.score);
+    return `<tr>
+      <td><strong>${escHtml(r.target)}</strong></td>
+      <td style="min-width:120px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="risk-bar-wrap" style="flex:1">
+            <div class="risk-bar-fill" style="width:${r.score}%;background:${color}"></div>
+          </div>
+          <span style="color:${color};font-weight:600;min-width:30px">${r.score}</span>
+        </div>
+      </td>
+      <td class="text-muted text-sm">${escHtml(String(r.total))}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== FINDINGS =====
+let _findingsDebounce = null;
+function debouncedLoadFindings() {
+  clearTimeout(_findingsDebounce);
+  _findingsDebounce = setTimeout(() => { _findingsPage = 0; loadFindings(); }, 320);
+}
+
+async function loadFindings() {
+  const search = document.getElementById('f-search').value.trim();
+  const severity = document.getElementById('f-severity').value;
+  const source = document.getElementById('f-source').value;
+  const offset = _findingsPage * FINDINGS_PAGE_SIZE;
+
+  let url = `/api/v1/findings?limit=${FINDINGS_PAGE_SIZE}&offset=${offset}`;
+  if (search) url += '&search=' + encodeURIComponent(search);
+  if (severity) url += '&severity=' + encodeURIComponent(severity);
+  if (source) url += '&source=' + encodeURIComponent(source);
+
+  const tbody = document.getElementById('findings-body');
+  tbody.innerHTML = '<tr><td colspan="7" style="padding:20px 12px"><span class="skel" style="width:100%">&nbsp;</span></td></tr>';
+
+  const d = await api(url);
+  if (!d) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">⚠</div><div class="empty-title">Failed to load findings</div></div></td></tr>';
+    return;
   }
 
-  async function loadFindings() {
-    const target = document.getElementById('filter-target').value;
-    const severity = document.getElementById('filter-severity').value;
-    const source = document.getElementById('filter-source').value;
-    let url = '/api/v1/findings?limit=200';
-    if (target) url += '&target=' + encodeURIComponent(target);
-    if (severity) url += '&severity=' + severity;
-    if (source) url += '&source=' + source;
+  _findingsTotal = d.total;
 
-    const d = await get(url);
-    const tbody = document.getElementById('findings-body');
-    if (!d || !d.results.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">No findings</td></tr>';
-      return;
-    }
+  if (!d.results.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">No findings match your filters</div><div class="empty-sub">Try adjusting the search criteria</div></div></td></tr>';
+  } else {
     tbody.innerHTML = d.results.map(r => `
-      <tr>
-        <td>${r.target}</td>
-        <td>${r.source_feed}</td>
-        <td><code>${r.exposure_type}</code></td>
+      <tr onclick="openFinding(${r.id})">
+        <td><strong>${escHtml(r.target)}</strong></td>
+        <td class="text-muted">${escHtml(r.source_feed)}</td>
+        <td><span class="mono">${escHtml(r.exposure_type)}</span></td>
         <td class="trunc" title="${escHtml(r.value || '')}">${escHtml((r.value || '').substring(0,60))}</td>
-        <td><span class="badge badge-${r.severity}">${r.severity}</span></td>
-        <td>${r.breach_name || ''}</td>
-        <td style="color:#8b949e;font-size:12px">${(r.first_seen_at||'').substring(0,19)}</td>
+        <td>${severityBadge(r.severity)}</td>
+        <td class="text-muted trunc">${escHtml(r.breach_name || '')}</td>
+        <td class="text-muted text-sm">${fmtDt(r.first_seen_at)}</td>
       </tr>`).join('');
   }
 
-  async function loadAlerts() {
-    const d = await get('/api/v1/alerts?limit=30');
-    const tbody = document.getElementById('alerts-body');
-    if (!d || !d.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No alerts</td></tr>';
-      return;
+  const start = offset + 1;
+  const end = Math.min(offset + d.results.length, d.total);
+  document.getElementById('findings-info').textContent =
+    d.total > 0 ? `${start}–${end} of ${d.total}` : '0 results';
+  document.getElementById('btn-prev').disabled = _findingsPage === 0;
+  document.getElementById('btn-next').disabled = (offset + FINDINGS_PAGE_SIZE) >= d.total;
+}
+
+function findingsPage(dir) {
+  _findingsPage = Math.max(0, _findingsPage + dir);
+  loadFindings();
+}
+
+// ===== EXPORT =====
+function exportFindings(fmt) {
+  const search = document.getElementById('f-search').value.trim();
+  const severity = document.getElementById('f-severity').value;
+  const source = document.getElementById('f-source').value;
+  let url = `/api/v1/findings?limit=5000&offset=0`;
+  if (search) url += '&search=' + encodeURIComponent(search);
+  if (severity) url += '&severity=' + encodeURIComponent(severity);
+  if (source) url += '&source=' + encodeURIComponent(source);
+
+  fetch(url).then(r => r.json()).then(d => {
+    if (!d || !d.results) return;
+    let content, mime, ext;
+    if (fmt === 'json') {
+      content = JSON.stringify(d.results, null, 2);
+      mime = 'application/json'; ext = 'json';
+    } else {
+      const fields = ['id','target','source_feed','exposure_type','value','severity','breach_name','breach_date','description','first_seen_at'];
+      const rows = [fields.join(','), ...d.results.map(r =>
+        fields.map(f => JSON.stringify(r[f] ?? '')).join(',')
+      )];
+      content = rows.join('\n');
+      mime = 'text/csv'; ext = 'csv';
     }
-    tbody.innerHTML = d.map(a => `
-      <tr>
-        <td style="color:#8b949e;font-size:12px">${(a.created_at||'').substring(0,19)}</td>
-        <td>${a.target}</td>
-        <td>${a.source_feed}</td>
-        <td><span class="badge badge-${a.severity}">${a.severity}</span></td>
-        <td class="trunc">${escHtml(a.message)}</td>
-      </tr>`).join('');
+    const blob = new Blob([content], {type: mime});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `wraith-findings-${new Date().toISOString().substring(0,10)}.${ext}`;
+    a.click();
+    toast(`Exported ${d.results.length} findings as ${ext.toUpperCase()}`, 'success');
+  });
+}
+
+// ===== SAVED SEARCHES =====
+async function loadSavedSearches() {
+  const d = await api('/api/v1/searches');
+  _savedSearches = d || [];
+  renderSavedSearches();
+}
+
+function renderSavedSearches() {
+  const bar = document.getElementById('saved-searches-bar');
+  if (!_savedSearches.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = '<span class="text-muted text-sm" style="margin-right:4px">Saved:</span>' +
+    _savedSearches.map(s => `
+      <span class="saved-search-chip" onclick="applySearch(${s.id})">
+        ⭐ ${escHtml(s.name)}
+        <span class="chip-del" onclick="event.stopPropagation();deleteSavedSearch(${s.id})">✕</span>
+      </span>
+    `).join('');
+}
+
+function applySearch(id) {
+  const s = _savedSearches.find(x => x.id === id);
+  if (!s) return;
+  if (s.filters.search !== undefined) document.getElementById('f-search').value = s.filters.search || '';
+  if (s.filters.severity !== undefined) document.getElementById('f-severity').value = s.filters.severity || '';
+  if (s.filters.source !== undefined) document.getElementById('f-source').value = s.filters.source || '';
+  _findingsPage = 0;
+  loadFindings();
+}
+
+async function deleteSavedSearch(id) {
+  await apiDelete(`/api/v1/searches/${id}`);
+  await loadSavedSearches();
+  toast('Saved search removed', 'info');
+}
+
+function saveCurrentSearch() {
+  const search = document.getElementById('f-search').value.trim();
+  const severity = document.getElementById('f-severity').value;
+  const source = document.getElementById('f-source').value;
+  if (!search && !severity && !source) { toast('Set at least one filter before saving', 'error'); return; }
+  const name = prompt('Name this saved search:');
+  if (!name) return;
+  apiPost('/api/v1/searches', { name, filters: { search, severity, source } }).then(() => {
+    loadSavedSearches();
+    toast('Search saved', 'success');
+  });
+}
+
+// ===== ALERTS =====
+async function loadAlerts() {
+  const d = await api('/api/v1/alerts?limit=100');
+  const tbody = document.getElementById('alerts-body');
+  const ovTbody = document.getElementById('ov-alerts-body');
+  if (!d || !d.results || !d.results.length) {
+    const empty = '<tr><td colspan="6"><div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">No alerts yet</div></div></td></tr>';
+    tbody.innerHTML = empty;
+    ovTbody.innerHTML = '<tr><td colspan="4"><div class="empty"><div class="empty-icon">🔔</div><div class="empty-title">No recent alerts</div></div></td></tr>';
+    return;
+  }
+  const rows = d.results;
+  tbody.innerHTML = rows.map(a => `
+    <tr>
+      <td class="text-muted text-sm">${fmtDt(a.created_at)}</td>
+      <td><strong>${escHtml(a.target)}</strong></td>
+      <td class="text-muted">${escHtml(a.source_feed)}</td>
+      <td>${severityBadge(a.severity)}</td>
+      <td class="trunc">${escHtml(a.message)}</td>
+      <td>${a.sent ? '<span style="color:var(--success)">✓</span>' : '<span class="text-muted">—</span>'}</td>
+    </tr>`).join('');
+
+  ovTbody.innerHTML = rows.slice(0, 8).map(a => `
+    <tr>
+      <td class="text-muted text-sm">${fmtDt(a.created_at)}</td>
+      <td><strong>${escHtml(a.target)}</strong></td>
+      <td>${severityBadge(a.severity)}</td>
+      <td class="trunc">${escHtml(a.message)}</td>
+    </tr>`).join('');
+}
+
+// ===== TARGETS =====
+async function loadTargets() {
+  const d = await api('/api/v1/targets');
+  const tbody = document.getElementById('targets-body');
+  if (!d || !d.length) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">📡</div><div class="empty-title">No watch targets</div><div class="empty-sub">Add a domain or email address to monitor</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = d.map(t => `
+    <tr>
+      <td><strong>${escHtml(t.target)}</strong></td>
+      <td class="text-muted">${escHtml(t.target_type)}</td>
+      <td>${t.active
+        ? '<span class="dot dot-ok"></span><span style="color:var(--success)">Active</span>'
+        : '<span class="dot dot-error"></span><span class="text-muted">Inactive</span>'}</td>
+      <td class="text-muted text-sm">${t.last_scanned_at ? fmtDt(t.last_scanned_at) : '—'}</td>
+      <td>${t.active
+        ? `<button class="btn btn-sm btn-danger" onclick="removeTarget(${t.id})">Remove</button>`
+        : '<span class="text-muted text-sm">—</span>'}</td>
+    </tr>`).join('');
+}
+
+async function addTarget() {
+  const input = document.getElementById('new-target-input');
+  const target = input.value.trim();
+  if (!target) { toast('Enter a domain or email address', 'error'); return; }
+  const d = await apiPost('/api/v1/targets', { target });
+  if (!d) { toast('Failed to add target', 'error'); return; }
+  if (d.status === 'exists') { toast('Target already being monitored', 'info'); }
+  else { toast(`Now watching: ${target}`, 'success'); }
+  input.value = '';
+  loadTargets();
+}
+
+async function removeTarget(id) {
+  const d = await apiDelete(`/api/v1/targets/${id}`);
+  if (d && d.status === 'deactivated') { toast('Target removed', 'info'); loadTargets(); }
+}
+
+// ===== TIMELINE =====
+let _tlDebounce = null;
+function debouncedLoadTimeline() {
+  clearTimeout(_tlDebounce);
+  _tlDebounce = setTimeout(loadTimeline, 400);
+}
+
+async function loadTimeline() {
+  const days = document.getElementById('tl-days').value;
+  const target = document.getElementById('tl-target').value.trim();
+  let url = `/api/v1/timeline?days=${days}`;
+  if (target) url += '&target=' + encodeURIComponent(target);
+
+  const d = await api(url);
+  const ctx = document.getElementById('timeline-chart').getContext('2d');
+  if (_tlChart) _tlChart.destroy();
+
+  if (!d || !d.data.length) {
+    _tlChart = null;
+    return;
   }
 
-  async function loadTargets() {
-    const d = await get('/api/v1/targets');
-    const tbody = document.getElementById('targets-body');
-    if (!d || !d.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No targets</td></tr>';
-      return;
+  const labels = d.data.map(x => x.date);
+  _tlChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Critical',
+          data: d.data.map(x => x.CRITICAL || 0),
+          borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.08)',
+          tension: 0.3, fill: true, pointRadius: 3,
+        },
+        {
+          label: 'High',
+          data: d.data.map(x => x.HIGH || 0),
+          borderColor: '#ff8800', backgroundColor: 'rgba(255,136,0,0.06)',
+          tension: 0.3, fill: true, pointRadius: 3,
+        },
+        {
+          label: 'Medium',
+          data: d.data.map(x => x.MEDIUM || 0),
+          borderColor: '#d29922', backgroundColor: 'rgba(210,153,34,0.06)',
+          tension: 0.3, fill: true, pointRadius: 3,
+        },
+        {
+          label: 'Low',
+          data: d.data.map(x => x.LOW || 0),
+          borderColor: '#8b949e', backgroundColor: 'rgba(139,148,158,0.04)',
+          tension: 0.3, fill: true, pointRadius: 3,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#c9d1d9', font: { size: 12 }, padding: 12 } },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#8b949e', font: { size: 11 }, maxTicksLimit: 10 },
+          grid: { color: '#21262d' },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: '#8b949e', font: { size: 11 }, stepSize: 1 },
+          grid: { color: '#21262d' },
+        }
+      },
+      animation: { duration: 400 },
     }
-    tbody.innerHTML = d.map(t => `
-      <tr>
-        <td>${t.target}</td>
-        <td style="color:#8b949e">${t.target_type}</td>
-        <td><span class="source-dot ${t.active ? 'dot-ok' : 'dot-error'}"></span>${t.active ? 'Active' : 'Inactive'}</td>
-        <td style="color:#8b949e;font-size:12px">${t.last_scanned_at ? t.last_scanned_at.substring(0,19) : 'Never'}</td>
-      </tr>`).join('');
-  }
+  });
+}
 
-  async function loadSources() {
-    const d = await get('/api/v1/sources');
-    const tbody = document.getElementById('sources-body');
-    if (!d || !d.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No feed data yet</td></tr>';
-      return;
-    }
-    tbody.innerHTML = d.map(f => `
-      <tr>
-        <td>${f.feed_name}</td>
-        <td><span class="source-dot ${f.last_status === 'ok' ? 'dot-ok' : f.last_status === 'error' ? 'dot-error' : 'dot-unknown'}"></span>${f.last_status || 'Unknown'}</td>
-        <td style="color:#8b949e;font-size:12px">${f.last_run_at ? f.last_run_at.substring(0,19) : 'Never'}</td>
-        <td>${f.total_results || 0}</td>
-      </tr>`).join('');
-  }
+// ===== FINDING DETAIL MODAL =====
+async function openFinding(id) {
+  const d = await api(`/api/v1/findings/${id}`);
+  if (!d) { toast('Failed to load finding detail', 'error'); return; }
 
-  function escHtml(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  document.getElementById('modal-title').textContent = `#${d.id} — ${d.exposure_type}`;
+  document.getElementById('modal-severity').innerHTML = severityBadge(d.severity);
 
-  async function loadAll() {
-    await Promise.all([loadStats(), loadFindings(), loadAlerts(), loadTargets(), loadSources()]);
-    document.getElementById('last-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-  }
+  const notes = (d.notes || []).map(n => `
+    <div class="note-item">
+      <div class="note-meta">${fmtDt(n.created_at)}</div>
+      <div>${escHtml(n.content)}</div>
+      <button class="btn btn-sm btn-danger note-del" onclick="deleteNote(${n.id}, ${d.id})">✕</button>
+    </div>
+  `).join('') || '<div class="text-muted text-sm">No notes yet.</div>';
 
-  loadAll();
-  setInterval(loadAll, 30000);
+  document.getElementById('modal-body').innerHTML = `
+    <div class="field-grid">
+      <div class="field"><div class="field-label">Target</div><div class="field-value">${escHtml(d.target)}</div></div>
+      <div class="field"><div class="field-label">Source</div><div class="field-value">${escHtml(d.source_feed)}</div></div>
+      <div class="field"><div class="field-label">Exposure Type</div><div class="field-value mono">${escHtml(d.exposure_type)}</div></div>
+      <div class="field"><div class="field-label">First Seen</div><div class="field-value">${fmtDt(d.first_seen_at)}</div></div>
+      <div class="field" style="grid-column:1/-1"><div class="field-label">Value</div><div class="field-value mono">${escHtml(d.value || '—')}</div></div>
+      ${d.breach_name ? `<div class="field"><div class="field-label">Breach</div><div class="field-value">${escHtml(d.breach_name)}</div></div>` : ''}
+      ${d.breach_date ? `<div class="field"><div class="field-label">Breach Date</div><div class="field-value">${escHtml(d.breach_date)}</div></div>` : ''}
+      ${d.description ? `<div class="field" style="grid-column:1/-1"><div class="field-label">Description</div><div class="field-value">${escHtml(d.description)}</div></div>` : ''}
+    </div>
+    <div class="notes-section">
+      <h4>Investigation Notes</h4>
+      <div id="notes-list">${notes}</div>
+      <textarea class="note-input" id="note-text" placeholder="Add a note…"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="addNote(${d.id}, '${escHtml(d.target)}')">Add Note</button>
+        <button class="btn" onclick="closeModal()">Close</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('detail-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('detail-modal').classList.remove('open');
+}
+
+function closeModalOnOverlay(e) {
+  if (e.target === e.currentTarget) closeModal();
+}
+
+async function addNote(findingId, target) {
+  const content = document.getElementById('note-text').value.trim();
+  if (!content) { toast('Enter a note first', 'error'); return; }
+  const d = await apiPost('/api/v1/notes', { finding_id: findingId, target, content });
+  if (d && d.id) {
+    toast('Note added', 'success');
+    openFinding(findingId);
+  } else {
+    toast('Failed to add note', 'error');
+  }
+}
+
+async function deleteNote(noteId, findingId) {
+  await apiDelete(`/api/v1/notes/${noteId}`);
+  toast('Note deleted', 'info');
+  openFinding(findingId);
+}
+
+// ===== KEYBOARD SHORTCUT =====
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ===== LOAD ALL =====
+async function loadAll() {
+  await Promise.all([
+    loadStats(),
+    loadSources(),
+    loadRisk(),
+    loadAlerts(),
+  ]);
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+// Boot
+loadAll();
+setInterval(loadAll, 30000);
 </script>
 </body>
 </html>

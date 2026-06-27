@@ -2,17 +2,39 @@ import asyncio
 import logging
 import smtplib
 import ssl
-from datetime import datetime
+from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from html import escape as html_escape
+from urllib.parse import urlparse
 
 import aiohttp
 
-from core.database import Alert, get_db
+from core.database import Alert, db_session
 
 logger = logging.getLogger(__name__)
 
 SEVERITY_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+
+_ALLOWED_WEBHOOK_SCHEMES = {"https"}
+_ALLOWED_WEBHOOK_HOSTS = {
+    "hooks.slack.com",
+    "discord.com",
+    "discordapp.com",
+    "canary.discord.com",
+}
+
+
+def _validate_webhook_url(url: str) -> bool:
+    """Prevent SSRF by allowing only known webhook hosts over HTTPS."""
+    try:
+        parsed = urlparse(url)
+        return (
+            parsed.scheme in _ALLOWED_WEBHOOK_SCHEMES
+            and any(parsed.hostname.endswith(h) for h in _ALLOWED_WEBHOOK_HOSTS)
+        )
+    except Exception:
+        return False
 
 
 async def queue_alerts(target: str, results: list[dict], config: dict) -> None:
@@ -32,24 +54,24 @@ async def queue_alerts(target: str, results: list[dict], config: dict) -> None:
     if not new_alerts:
         return
 
-    db = get_db()
     try:
-        for r in new_alerts:
-            message = (
-                f"[{r['severity']}] {r['source_feed']}: {r['exposure_type']} — "
-                f"{r['value'][:100]}"
-            )
-            alert = Alert(
-                target=target,
-                source_feed=r["source_feed"],
-                severity=r["severity"],
-                message=message,
-                sent=False,
-            )
-            db.add(alert)
-        db.commit()
-    finally:
-        db.close()
+        with db_session() as db:
+            for r in new_alerts:
+                message = (
+                    f"[{r['severity']}] {r['source_feed']}: {r['exposure_type']} — "
+                    f"{(r['value'] or '')[:100]}"
+                )
+                alert = Alert(
+                    target=target,
+                    source_feed=r["source_feed"],
+                    severity=r["severity"],
+                    message=message,
+                    sent=False,
+                )
+                db.add(alert)
+            db.commit()
+    except Exception as e:
+        logger.error("Failed to persist alerts for %s: %s", target, e)
 
     await dispatch_alerts(new_alerts, target, config)
 
@@ -58,11 +80,21 @@ async def dispatch_alerts(results: list[dict], target: str, config: dict) -> Non
     alert_cfg = config.get("alerting", {})
     tasks = []
 
-    if alert_cfg.get("slack", {}).get("enabled"):
-        tasks.append(_send_slack(results, target, alert_cfg["slack"]["webhook_url"]))
+    slack_cfg = alert_cfg.get("slack", {})
+    if slack_cfg.get("enabled"):
+        webhook = slack_cfg.get("webhook_url", "")
+        if _validate_webhook_url(webhook):
+            tasks.append(_send_slack(results, target, webhook))
+        else:
+            logger.warning("Slack webhook URL failed validation — skipping")
 
-    if alert_cfg.get("discord", {}).get("enabled"):
-        tasks.append(_send_discord(results, target, alert_cfg["discord"]["webhook_url"]))
+    discord_cfg = alert_cfg.get("discord", {})
+    if discord_cfg.get("enabled"):
+        webhook = discord_cfg.get("webhook_url", "")
+        if _validate_webhook_url(webhook):
+            tasks.append(_send_discord(results, target, webhook))
+        else:
+            logger.warning("Discord webhook URL failed validation — skipping")
 
     if alert_cfg.get("smtp", {}).get("enabled"):
         tasks.append(_send_email_async(results, target, alert_cfg["smtp"]))
@@ -86,7 +118,7 @@ async def _send_slack(results: list[dict], target: str, webhook_url: str) -> Non
     for r in results[:5]:
         fields.append({
             "title": f"[{r['severity']}] {r['source_feed']}",
-            "value": f"{r['exposure_type']}: {r['value'][:80]}",
+            "value": f"{r['exposure_type']}: {(r['value'] or '')[:80]}",
             "short": False,
         })
 
@@ -96,19 +128,19 @@ async def _send_slack(results: list[dict], target: str, webhook_url: str) -> Non
             "title": f"WRAITH Alert — {target}",
             "fields": fields,
             "footer": "WRAITH Credential Monitor",
-            "ts": int(datetime.utcnow().timestamp()),
+            "ts": int(datetime.now(timezone.utc).timestamp()),
         }]
     }
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as resp:
+            async with session.post(webhook_url, json=payload, ssl=True) as resp:
                 if resp.status != 200:
-                    logger.error(f"Slack alert failed: HTTP {resp.status}")
+                    logger.error("Slack alert failed: HTTP %d", resp.status)
                 else:
-                    logger.info(f"Slack alert sent for {target}")
+                    logger.info("Slack alert sent for %s", target)
     except Exception as e:
-        logger.error(f"Slack alert error: {e}")
+        logger.error("Slack alert error: %s", e)
 
 
 async def _send_discord(results: list[dict], target: str, webhook_url: str) -> None:
@@ -117,12 +149,13 @@ async def _send_discord(results: list[dict], target: str, webhook_url: str) -> N
 
     description_lines = []
     for r in results[:10]:
+        value_safe = (r.get("value") or "")[:60]
         description_lines.append(
-            f"**[{r['severity']}]** `{r['source_feed']}` — {r['exposure_type']}: `{r['value'][:60]}`"
+            f"**[{r['severity']}]** `{r['source_feed']}` — {r['exposure_type']}: `{value_safe}`"
         )
 
     embed = {
-        "title": f"🚨 WRAITH Alert — {target}",
+        "title": f"\U0001f6a8 WRAITH Alert — {target}",
         "description": "\n".join(description_lines),
         "color": color,
         "fields": [
@@ -130,20 +163,20 @@ async def _send_discord(results: list[dict], target: str, webhook_url: str) -> N
             {"name": "Critical", "value": str(critical), "inline": True},
         ],
         "footer": {"text": "WRAITH Credential Monitor"},
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     payload = {"embeds": [embed]}
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as resp:
+            async with session.post(webhook_url, json=payload, ssl=True) as resp:
                 if resp.status not in (200, 204):
-                    logger.error(f"Discord alert failed: HTTP {resp.status}")
+                    logger.error("Discord alert failed: HTTP %d", resp.status)
                 else:
-                    logger.info(f"Discord alert sent for {target}")
+                    logger.info("Discord alert sent for %s", target)
     except Exception as e:
-        logger.error(f"Discord alert error: {e}")
+        logger.error("Discord alert error: %s", e)
 
 
 async def _send_email_async(results: list[dict], target: str, smtp_cfg: dict) -> None:
@@ -154,27 +187,30 @@ async def _send_email_async(results: list[dict], target: str, smtp_cfg: dict) ->
 def _send_email_sync(results: list[dict], target: str, smtp_cfg: dict) -> None:
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"[WRAITH] Credential Exposure Alert — {target} ({len(results)} findings)"
+        msg["Subject"] = (
+            f"[WRAITH] Credential Exposure Alert — {target} ({len(results)} findings)"
+        )
         msg["From"] = smtp_cfg.get("from_email", "")
         msg["To"] = smtp_cfg.get("to_email", "")
 
         rows = ""
         for r in results:
+            sev = r.get("severity", "")
+            color = "red" if sev in ("CRITICAL", "HIGH") else "orange"
             rows += (
                 f"<tr>"
-                f"<td>{r.get('source_feed','')}</td>"
-                f"<td>{r.get('exposure_type','')}</td>"
-                f"<td>{r.get('value','')[:80]}</td>"
-                f"<td style='color:{'red' if r.get('severity') in ('CRITICAL','HIGH') else 'orange'}'>"
-                f"{r.get('severity','')}</td>"
-                f"<td>{r.get('breach_name','') or ''}</td>"
+                f"<td>{html_escape(r.get('source_feed', ''))}</td>"
+                f"<td>{html_escape(r.get('exposure_type', ''))}</td>"
+                f"<td>{html_escape((r.get('value') or '')[:80])}</td>"
+                f"<td style='color:{color}'>{html_escape(sev)}</td>"
+                f"<td>{html_escape(r.get('breach_name', '') or '')}</td>"
                 f"</tr>"
             )
 
         html = f"""
         <html><body>
         <h2>WRAITH Credential Exposure Alert</h2>
-        <p><strong>Target:</strong> {target}</p>
+        <p><strong>Target:</strong> {html_escape(target)}</p>
         <p><strong>Findings:</strong> {len(results)}</p>
         <table border="1" cellpadding="5" cellspacing="0">
           <thead><tr><th>Source</th><th>Type</th><th>Value</th><th>Severity</th><th>Breach</th></tr></thead>
@@ -206,6 +242,6 @@ def _send_email_sync(results: list[dict], target: str, smtp_cfg: dict) -> None:
                     server.login(user, password)
                 server.sendmail(msg["From"], msg["To"], msg.as_string())
 
-        logger.info(f"Email alert sent for {target}")
+        logger.info("Email alert sent for %s", target)
     except Exception as e:
-        logger.error(f"Email alert error: {e}")
+        logger.error("Email alert error: %s", e)
