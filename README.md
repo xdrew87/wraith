@@ -68,7 +68,7 @@ Feed results flow: `CLI scan` → `aggregator.aggregate()` → `run_feed()` per 
 
 ## Screenshots
 
-> Dashboard screenshots — run `py src/main.py dashboard` and navigate to `http://localhost:5050`
+> Dashboard screenshots — <img width="1873" height="955" alt="Screenshot 2026-06-27 194308" src="https://github.com/user-attachments/assets/580bc31f-50de-478d-be42-6cc734035dc6" />
 
 ---
 
