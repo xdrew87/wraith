@@ -29,9 +29,8 @@ def _validate_webhook_url(url: str) -> bool:
     """Prevent SSRF by allowing only known webhook hosts over HTTPS."""
     try:
         parsed = urlparse(url)
-        return (
-            parsed.scheme in _ALLOWED_WEBHOOK_SCHEMES
-            and any(parsed.hostname.endswith(h) for h in _ALLOWED_WEBHOOK_HOSTS)
+        return parsed.scheme in _ALLOWED_WEBHOOK_SCHEMES and any(
+            parsed.hostname.endswith(h) for h in _ALLOWED_WEBHOOK_HOSTS
         )
     except Exception:
         return False
@@ -46,10 +45,7 @@ async def queue_alerts(target: str, results: list[dict], config: dict) -> None:
     min_severity = alert_cfg.get("min_severity", "MEDIUM")
     min_level = SEVERITY_ORDER.get(min_severity, 1)
 
-    new_alerts = [
-        r for r in results
-        if SEVERITY_ORDER.get(r.get("severity", "LOW"), 0) >= min_level
-    ]
+    new_alerts = [r for r in results if SEVERITY_ORDER.get(r.get("severity", "LOW"), 0) >= min_level]
 
     if not new_alerts:
         return
@@ -57,10 +53,7 @@ async def queue_alerts(target: str, results: list[dict], config: dict) -> None:
     try:
         with db_session() as db:
             for r in new_alerts:
-                message = (
-                    f"[{r['severity']}] {r['source_feed']}: {r['exposure_type']} — "
-                    f"{(r['value'] or '')[:100]}"
-                )
+                message = f"[{r['severity']}] {r['source_feed']}: {r['exposure_type']} — {(r['value'] or '')[:100]}"
                 alert = Alert(
                     target=target,
                     source_feed=r["source_feed"],
@@ -116,29 +109,35 @@ async def _send_slack(results: list[dict], target: str, webhook_url: str) -> Non
     ]
 
     for r in results[:5]:
-        fields.append({
-            "title": f"[{r['severity']}] {r['source_feed']}",
-            "value": f"{r['exposure_type']}: {(r['value'] or '')[:80]}",
-            "short": False,
-        })
+        fields.append(
+            {
+                "title": f"[{r['severity']}] {r['source_feed']}",
+                "value": f"{r['exposure_type']}: {(r['value'] or '')[:80]}",
+                "short": False,
+            }
+        )
 
     payload = {
-        "attachments": [{
-            "color": color,
-            "title": f"WRAITH Alert — {target}",
-            "fields": fields,
-            "footer": "WRAITH Credential Monitor",
-            "ts": int(datetime.now(timezone.utc).timestamp()),
-        }]
+        "attachments": [
+            {
+                "color": color,
+                "title": f"WRAITH Alert — {target}",
+                "fields": fields,
+                "footer": "WRAITH Credential Monitor",
+                "ts": int(datetime.now(timezone.utc).timestamp()),
+            }
+        ]
     }
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload, ssl=True) as resp:
-                if resp.status != 200:
-                    logger.error("Slack alert failed: HTTP %d", resp.status)
-                else:
-                    logger.info("Slack alert sent for %s", target)
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(webhook_url, json=payload, ssl=True) as resp,
+        ):
+            if resp.status != 200:
+                logger.error("Slack alert failed: HTTP %d", resp.status)
+            else:
+                logger.info("Slack alert sent for %s", target)
     except Exception as e:
         logger.error("Slack alert error: %s", e)
 
@@ -150,9 +149,7 @@ async def _send_discord(results: list[dict], target: str, webhook_url: str) -> N
     description_lines = []
     for r in results[:10]:
         value_safe = (r.get("value") or "")[:60]
-        description_lines.append(
-            f"**[{r['severity']}]** `{r['source_feed']}` — {r['exposure_type']}: `{value_safe}`"
-        )
+        description_lines.append(f"**[{r['severity']}]** `{r['source_feed']}` — {r['exposure_type']}: `{value_safe}`")
 
     embed = {
         "title": f"\U0001f6a8 WRAITH Alert — {target}",
@@ -169,12 +166,14 @@ async def _send_discord(results: list[dict], target: str, webhook_url: str) -> N
     payload = {"embeds": [embed]}
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload, ssl=True) as resp:
-                if resp.status not in (200, 204):
-                    logger.error("Discord alert failed: HTTP %d", resp.status)
-                else:
-                    logger.info("Discord alert sent for %s", target)
+        async with (
+            aiohttp.ClientSession() as session,
+            session.post(webhook_url, json=payload, ssl=True) as resp,
+        ):
+            if resp.status not in (200, 204):
+                logger.error("Discord alert failed: HTTP %d", resp.status)
+            else:
+                logger.info("Discord alert sent for %s", target)
     except Exception as e:
         logger.error("Discord alert error: %s", e)
 
@@ -187,9 +186,7 @@ async def _send_email_async(results: list[dict], target: str, smtp_cfg: dict) ->
 def _send_email_sync(results: list[dict], target: str, smtp_cfg: dict) -> None:
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = (
-            f"[WRAITH] Credential Exposure Alert — {target} ({len(results)} findings)"
-        )
+        msg["Subject"] = f"[WRAITH] Credential Exposure Alert — {target} ({len(results)} findings)"
         msg["From"] = smtp_cfg.get("from_email", "")
         msg["To"] = smtp_cfg.get("to_email", "")
 

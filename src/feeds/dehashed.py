@@ -28,6 +28,7 @@ class DeHashedFeed(BaseFeed):
 
     async def lookup(self, target: str, target_type: str) -> list[dict]:
         if not self.email or not self.api_key:
+            self._skip_reason = "No credentials"
             logger.warning("[DeHashed] No credentials configured — skipping")
             return []
 
@@ -54,37 +55,43 @@ class DeHashedFeed(BaseFeed):
             database_name = entry.get("database_name", "")
 
             if password:
-                results.append(self.make_result(
-                    target=target,
-                    source_feed=self.name,
-                    exposure_type="plaintext_password",
-                    value=f"{email}:{password}" if email else password,
-                    severity="CRITICAL",
-                    breach_name=database_name,
-                    description=f"Plaintext password found in {database_name}",
-                    raw=entry,
-                ))
+                results.append(
+                    self.make_result(
+                        target=target,
+                        source_feed=self.name,
+                        exposure_type="plaintext_password",
+                        value=f"{email}:{password}" if email else password,
+                        severity="CRITICAL",
+                        breach_name=database_name,
+                        description=f"Plaintext password found in {database_name}",
+                        raw=entry,
+                    )
+                )
             elif hashed_password:
-                results.append(self.make_result(
-                    target=target,
-                    source_feed=self.name,
-                    exposure_type="hashed_password",
-                    value=f"{email}:{hashed_password}" if email else hashed_password,
-                    severity="HIGH",
-                    breach_name=database_name,
-                    description=f"Hashed password found in {database_name}",
-                    raw=entry,
-                ))
+                results.append(
+                    self.make_result(
+                        target=target,
+                        source_feed=self.name,
+                        exposure_type="hashed_password",
+                        value=f"{email}:{hashed_password}" if email else hashed_password,
+                        severity="HIGH",
+                        breach_name=database_name,
+                        description=f"Hashed password found in {database_name}",
+                        raw=entry,
+                    )
+                )
             elif email:
-                results.append(self.make_result(
-                    target=target,
-                    source_feed=self.name,
-                    exposure_type="email_exposure",
-                    value=email,
-                    severity="MEDIUM",
-                    breach_name=database_name,
-                    description=f"Email found in {database_name}",
-                    raw=entry,
-                ))
+                results.append(
+                    self.make_result(
+                        target=target,
+                        source_feed=self.name,
+                        exposure_type="email_exposure",
+                        value=email,
+                        severity="MEDIUM",
+                        breach_name=database_name,
+                        description=f"Email found in {database_name}",
+                        raw=entry,
+                    )
+                )
 
         return results

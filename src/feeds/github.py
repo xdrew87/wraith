@@ -39,48 +39,77 @@ class GitHubFeed(BaseFeed):
         return h
 
     async def lookup(self, target: str, target_type: str) -> list[dict]:
-        if not self.token:
-            logger.warning("[GitHub] No token configured — rate limits will be very low")
-
         results = []
 
-        # Search for domain/email mentions in code
-        code_results = await self._code_search(target)
-        for item in code_results:
-            repo = item.get("repository", {}).get("full_name", "")
-            file_path = item.get("path", "")
-            html_url = item.get("html_url", "")
+        # Code search requires authentication; repo-level search works unauthenticated (60 req/hr)
+        if self.token:
+            code_results = await self._code_search(target)
+            for item in code_results:
+                repo = item.get("repository", {}).get("full_name", "")
+                file_path = item.get("path", "")
+                html_url = item.get("html_url", "")
 
-            # Check for credential patterns in the file
-            file_content = await self._fetch_raw(item.get("url", ""))
-            exposures = self._scan_for_secrets(file_content)
+                file_content = await self._fetch_raw(item.get("url", ""))
+                exposures = self._scan_for_secrets(file_content)
 
-            if exposures:
-                for exp_type, exp_value in exposures:
-                    results.append(self.make_result(
+                if exposures:
+                    for exp_type, exp_value in exposures:
+                        results.append(
+                            self.make_result(
+                                target=target,
+                                source_feed=self.name,
+                                exposure_type=exp_type,
+                                value=f"{repo}/{file_path}: {exp_value[:80]}",
+                                severity="CRITICAL"
+                                if exp_type in ("github_token", "aws_access_key", "private_key")
+                                else "HIGH",
+                                breach_name=repo,
+                                description=f"Credential found in public repo: {html_url}",
+                                raw={"repo": repo, "path": file_path, "url": html_url, "type": exp_type},
+                            )
+                        )
+                else:
+                    results.append(
+                        self.make_result(
+                            target=target,
+                            source_feed=self.name,
+                            exposure_type="code_mention",
+                            value=f"{repo}/{file_path}",
+                            severity="LOW",
+                            breach_name=repo,
+                            description=f"Target mentioned in public repo: {html_url}",
+                            raw={"repo": repo, "path": file_path, "url": html_url},
+                        )
+                    )
+        else:
+            # Unauthenticated: repo-level search only (60 req/hr, no code search)
+            logger.warning("[GitHub] No token — using unauthenticated repo search (limited rate limit)")
+            repo_results = await self._repo_search(target)
+            for item in repo_results:
+                repo = item.get("full_name", "")
+                html_url = item.get("html_url", "")
+                description = item.get("description") or ""
+                results.append(
+                    self.make_result(
                         target=target,
                         source_feed=self.name,
-                        exposure_type=exp_type,
-                        value=f"{repo}/{file_path}: {exp_value[:80]}",
-                        severity="CRITICAL" if exp_type in ("github_token", "aws_access_key", "private_key") else "HIGH",
+                        exposure_type="repo_mention",
+                        value=repo,
+                        severity="LOW",
                         breach_name=repo,
-                        description=f"Credential found in public repo: {html_url}",
-                        raw={"repo": repo, "path": file_path, "url": html_url, "type": exp_type},
-                    ))
-            else:
-                # Still record the domain/email mention even without extracted secret
-                results.append(self.make_result(
-                    target=target,
-                    source_feed=self.name,
-                    exposure_type="code_mention",
-                    value=f"{repo}/{file_path}",
-                    severity="LOW",
-                    breach_name=repo,
-                    description=f"Target mentioned in public repo: {html_url}",
-                    raw={"repo": repo, "path": file_path, "url": html_url},
-                ))
+                        description=f"Target mentioned in public repository: {html_url}"
+                        + (f" — {description[:120]}" if description else ""),
+                        raw={"repo": repo, "url": html_url, "description": description},
+                    )
+                )
 
         return results
+
+    async def _repo_search(self, target: str) -> list[dict]:
+        url = f"{self.base_url}/search/repositories"
+        params = {"q": f'"{target}"', "per_page": 20, "sort": "updated"}
+        data = await self._get(url, headers=self._headers(), params=params)
+        return data.get("items", [])
 
     async def _code_search(self, target: str) -> list[dict]:
         url = f"{self.base_url}/search/code"

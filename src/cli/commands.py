@@ -1,18 +1,21 @@
 import asyncio
 import logging
 import sys
+import time
 from pathlib import Path
-from typing import Optional
 
 import click
-from rich.console import Console
-from rich.table import Table
 from rich import box
+from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
 
-from core.config import load_config, setup_logging
-from core.database import init_db, get_db, WatchTarget, ExposedCredential, Alert
 from core.aggregator import aggregate, detect_target_type
-from core.reporter import render_table, to_json, to_csv
+from core.config import load_config, setup_logging
+from core.database import Alert, ExposedCredential, WatchTarget, get_db, init_db
+from core.reporter import render_table, to_csv, to_json
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -29,11 +32,130 @@ BANNER = """
 [dim]Credential Exposure Monitor — Authorized use only[/dim]
 """
 
+# Feed display names and whether they need a paid key (for the status table label)
+FEED_LABELS = {
+    "hibp": ("HIBP", True),
+    "dehashed": ("DeHashed", True),
+    "intelx": ("IntelX", True),
+    "pastebin": ("Pastebin", False),
+    "github": ("GitHub", False),
+    "hudsonrock": ("HudsonRock", False),
+    "crtsh": ("crt.sh", False),
+}
+
+SEV_COLORS = {"CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "cyan", "INFO": "dim"}
+
+
+def _build_scan_table(target: str, feed_states: dict, scan_start: float) -> Panel:
+    elapsed = time.monotonic() - scan_start
+    mins, secs = divmod(int(elapsed), 60)
+
+    table = Table(box=box.SIMPLE, show_header=True, header_style="bold dim", padding=(0, 1))
+    table.add_column("Feed", style="bold", width=14)
+    table.add_column("Status", width=30)
+    table.add_column("Results", justify="right", width=10)
+    table.add_column("Time", justify="right", width=7)
+
+    spinner_frames = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    spin_char = spinner_frames[int(elapsed * 8) % len(spinner_frames)]
+
+    for feed_name, (label, paid) in FEED_LABELS.items():
+        state = feed_states.get(feed_name)
+        if state is None:
+            continue
+
+        status_str = state["status"]
+        count = state["count"]
+        msg = state["msg"]
+        feed_elapsed = state["elapsed"]
+
+        if status_str == "pending":
+            status_cell = Text("◌  Queued", style="dim")
+            result_cell = Text("—", style="dim")
+        elif status_str == "running":
+            status_cell = Text(f"{spin_char}  Scanning...", style="yellow")
+            result_cell = Text("—", style="dim")
+        elif status_str == "skipped":
+            status_cell = Text(f"⚠  {msg}", style="yellow")
+            if paid:
+                status_cell.append("  (paid)", style="dim")
+            result_cell = Text("—", style="dim")
+        elif status_str == "done":
+            if count > 0:
+                status_cell = Text("✓  Complete", style="bold green")
+                result_cell = Text(str(count), style="bold green")
+            else:
+                status_cell = Text("✓  No results", style="dim green")
+                result_cell = Text("0", style="dim")
+        elif status_str == "error":
+            status_cell = Text(f"✗  {msg[:28]}", style="red")
+            result_cell = Text("—", style="red")
+        else:
+            status_cell = Text(status_str, style="dim")
+            result_cell = Text("—", style="dim")
+
+        time_cell = Text(f"{feed_elapsed:.1f}s", style="dim") if feed_elapsed > 0 else Text("—", style="dim")
+        table.add_row(label, status_cell, result_cell, time_cell)
+
+    title = Text.assemble(
+        ("🔍 WRAITH", "bold cyan"),
+        ("  —  ", "dim"),
+        ("Scanning: ", "dim"),
+        (target, "bold white"),
+        ("   ", ""),
+        (f"⏱  {mins:02d}:{secs:02d}", "dim"),
+    )
+    return Panel(table, title=title, border_style="cyan", padding=(0, 1))
+
+
+async def _scan_with_display(
+    target: str,
+    config: dict,
+    feed_list: list[str] | None,
+) -> list[dict]:
+    feed_states: dict[str, dict] = {}
+    scan_start = time.monotonic()
+
+    def progress_cb(name: str, status: str, count: int, msg: str, elapsed: float) -> None:
+        feed_states[name] = {"status": status, "count": count, "msg": msg, "elapsed": elapsed}
+
+    # Suppress INFO/WARNING console log output while Live display is active
+    root_logger = logging.getLogger()
+    original_levels = {h: h.level for h in root_logger.handlers}
+    for h in root_logger.handlers:
+        if h.level < logging.ERROR:
+            h.setLevel(logging.ERROR)
+
+    try:
+        with Live(
+            _build_scan_table(target, feed_states, scan_start),
+            console=console,
+            refresh_per_second=8,
+            transient=False,
+        ) as live:
+
+            async def _tick() -> None:
+                while True:
+                    live.update(_build_scan_table(target, feed_states, scan_start))
+                    await asyncio.sleep(0.125)
+
+            ticker = asyncio.create_task(_tick())
+            try:
+                results = await aggregate(target, config, feed_list, progress_cb=progress_cb)
+            finally:
+                ticker.cancel()
+                live.update(_build_scan_table(target, feed_states, scan_start))
+    finally:
+        for h, lvl in original_levels.items():
+            h.setLevel(lvl)
+
+    return results
+
 
 @click.group()
 @click.option("--config", "config_path", default=None, help="Path to config.yaml")
 @click.pass_context
-def cli(ctx: click.Context, config_path: Optional[str]) -> None:
+def cli(ctx: click.Context, config_path: str | None) -> None:
     """WRAITH — Credential Exposure Monitor"""
     ctx.ensure_object(dict)
     config = load_config(config_path)
@@ -57,7 +179,7 @@ def init(ctx: click.Context) -> None:
 @click.option("--format", "fmt", default="table", type=click.Choice(["table", "json", "csv"]))
 @click.option("--output", default=None, help="Write output to file")
 @click.pass_context
-def scan(ctx: click.Context, target: str, feeds: Optional[str], fmt: str, output: Optional[str]) -> None:
+def scan(ctx: click.Context, target: str, feeds: str | None, fmt: str, output: str | None) -> None:
     """Scan a domain or email for credential exposures."""
     console.print(BANNER)
     config = ctx.obj["config"]
@@ -65,13 +187,13 @@ def scan(ctx: click.Context, target: str, feeds: Optional[str], fmt: str, output
 
     feed_list = [f.strip() for f in feeds.split(",")] if feeds else None
 
-    console.print(f"[cyan]Scanning:[/cyan] {target}")
-    results = asyncio.run(aggregate(target, config, feed_list))
+    results = asyncio.run(_scan_with_display(target, config, feed_list))
 
     if not results:
-        console.print("[yellow]No findings.[/yellow]")
+        console.print("\n[yellow]No findings.[/yellow]")
         return
 
+    console.print()
     if fmt == "table":
         render_table(results)
     elif fmt == "json":
@@ -141,8 +263,9 @@ def unwatch(ctx: click.Context, target: str) -> None:
 @click.option("--output", default=None, help="Write output to file")
 @click.option("--limit", default=100, help="Max results to display")
 @click.pass_context
-def report(ctx: click.Context, target: Optional[str], severity: Optional[str],
-           fmt: str, output: Optional[str], limit: int) -> None:
+def report(
+    ctx: click.Context, target: str | None, severity: str | None, fmt: str, output: str | None, limit: int
+) -> None:
     """Display credential exposure findings."""
     config = ctx.obj["config"]
     init_db(config)
@@ -210,9 +333,7 @@ def alerts(ctx: click.Context, limit: int) -> None:
     table.add_column("Message")
 
     for a in rows:
-        sev_color = {
-            "CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "dim"
-        }.get(a.severity, "white")
+        sev_color = {"CRITICAL": "bold red", "HIGH": "red", "MEDIUM": "yellow", "LOW": "dim"}.get(a.severity, "white")
         table.add_row(
             str(a.created_at)[:19],
             a.target,
@@ -256,4 +377,5 @@ def dashboard(ctx: click.Context, port: int, host: str) -> None:
 
     dashboard_app_path = Path(__file__).resolve().parents[2] / "dashboard" / "backend" / "app.py"
     import subprocess
+
     subprocess.run([sys.executable, str(dashboard_app_path), "--port", str(port), "--host", host])

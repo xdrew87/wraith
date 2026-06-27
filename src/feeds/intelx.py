@@ -26,6 +26,7 @@ class IntelXFeed(BaseFeed):
 
     async def lookup(self, target: str, target_type: str) -> list[dict]:
         if not self.api_key:
+            self._skip_reason = "No API key"
             logger.warning("[IntelX] No API key configured — skipping")
             return []
 
@@ -74,16 +75,18 @@ class IntelXFeed(BaseFeed):
             else:
                 severity = "LOW"
 
-            results.append(self.make_result(
-                target=target,
-                source_feed=self.name,
-                exposure_type="paste_hit",
-                value=record_name or system_id,
-                severity=severity,
-                breach_name=bucket,
-                breach_date=date[:10] if date else None,
-                description=f"Found in IntelX bucket: {bucket} — {record_name}",
-                raw=record,
-            ))
+            results.append(
+                self.make_result(
+                    target=target,
+                    source_feed=self.name,
+                    exposure_type="paste_hit",
+                    value=record_name or system_id,
+                    severity=severity,
+                    breach_name=bucket,
+                    breach_date=date[:10] if date else None,
+                    description=f"Found in IntelX bucket: {bucket} — {record_name}",
+                    raw=record,
+                )
+            )
 
         return results

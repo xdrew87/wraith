@@ -2,11 +2,10 @@ import csv
 import io
 import json
 import logging
-from typing import Optional
 
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -57,7 +56,7 @@ def render_table(results: list[dict]) -> None:
     )
 
 
-def to_json(results: list[dict], output_path: Optional[str] = None) -> str:
+def to_json(results: list[dict], output_path: str | None = None) -> str:
     safe = []
     for r in results:
         row = {k: v for k, v in r.items() if k != "raw"}
@@ -71,9 +70,17 @@ def to_json(results: list[dict], output_path: Optional[str] = None) -> str:
     return output
 
 
-def to_csv(results: list[dict], output_path: Optional[str] = None) -> str:
-    fields = ["target", "source_feed", "exposure_type", "value", "severity",
-              "breach_name", "breach_date", "description"]
+def to_csv(results: list[dict], output_path: str | None = None) -> str:
+    fields = [
+        "target",
+        "source_feed",
+        "exposure_type",
+        "value",
+        "severity",
+        "breach_name",
+        "breach_date",
+        "description",
+    ]
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=fields, extrasaction="ignore")

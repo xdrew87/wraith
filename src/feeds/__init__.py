@@ -1,8 +1,10 @@
-from feeds.hibp import HIBPFeed
+from feeds.crt import CrtShFeed
 from feeds.dehashed import DeHashedFeed
+from feeds.github import GitHubFeed
+from feeds.hibp import HIBPFeed
+from feeds.hudsonrock import HudsonRockFeed
 from feeds.intelx import IntelXFeed
 from feeds.pastebin import PastebinFeed
-from feeds.github import GitHubFeed
 
 __all__ = [
     "HIBPFeed",
@@ -10,4 +12,6 @@ __all__ = [
     "IntelXFeed",
     "PastebinFeed",
     "GitHubFeed",
+    "HudsonRockFeed",
+    "CrtShFeed",
 ]

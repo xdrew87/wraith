@@ -2,7 +2,6 @@ import asyncio
 import hashlib
 import json
 import logging
-from typing import Optional
 
 import aiohttp
 
@@ -21,10 +20,9 @@ class BaseFeed:
 
     def __init__(self, config: dict):
         self.config = config
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._semaphore = asyncio.Semaphore(
-            config.get("monitor", {}).get("max_concurrent_feeds", 5)
-        )
+        self._session: aiohttp.ClientSession | None = None
+        self._semaphore = asyncio.Semaphore(config.get("monitor", {}).get("max_concurrent_feeds", 5))
+        self._skip_reason: str | None = None  # set before returning [] to signal a skip vs. no results
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -61,16 +59,10 @@ class BaseFeed:
         async with self._semaphore:
             while attempt < retries:
                 try:
-                    async with session.request(
-                        method, url, headers=headers, params=params, json=json_data
-                    ) as resp:
+                    async with session.request(method, url, headers=headers, params=params, json=json_data) as resp:
                         if resp.status == 429:
-                            retry_after = float(
-                                resp.headers.get("Retry-After", DEFAULT_BACKOFF * (attempt + 1))
-                            )
-                            logger.warning(
-                                "[%s] Rate limited. Waiting %.1fs", self.name, retry_after
-                            )
+                            retry_after = float(resp.headers.get("Retry-After", DEFAULT_BACKOFF * (attempt + 1)))
+                            logger.warning("[%s] Rate limited. Waiting %.1fs", self.name, retry_after)
                             await asyncio.sleep(retry_after)
                             attempt += 1
                             continue
@@ -80,9 +72,10 @@ class BaseFeed:
 
                         if resp.status >= 400:
                             text = await resp.text()
-                            logger.error(
-                                "[%s] HTTP %d: %s", self.name, resp.status, text[:200]
-                            )
+                            if resp.status >= 500:
+                                logger.warning("[%s] HTTP %d (upstream error): %s", self.name, resp.status, text[:200])
+                            else:
+                                logger.warning("[%s] HTTP %d: %s", self.name, resp.status, text[:200])
                             return {}
 
                         content_type = resp.content_type or ""
@@ -93,6 +86,10 @@ class BaseFeed:
                 except asyncio.TimeoutError:
                     last_error = "Timeout"
                     logger.warning("[%s] Timeout on attempt %d", self.name, attempt + 1)
+                except aiohttp.ClientConnectorDNSError as e:
+                    # DNS failures are permanent — no point retrying
+                    logger.warning("[%s] DNS resolution failed: %s", self.name, e)
+                    return {}
                 except aiohttp.ClientError as e:
                     last_error = str(e)
                     logger.warning("[%s] Client error on attempt %d: %s", self.name, attempt + 1, e)

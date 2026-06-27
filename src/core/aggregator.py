@@ -1,14 +1,17 @@
 import asyncio
 import logging
+import time
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Optional
 
 from core.database import ExposedCredential, FeedStatus, db_session
-from feeds.hibp import HIBPFeed
+from feeds.crt import CrtShFeed
 from feeds.dehashed import DeHashedFeed
+from feeds.github import GitHubFeed
+from feeds.hibp import HIBPFeed
+from feeds.hudsonrock import HudsonRockFeed
 from feeds.intelx import IntelXFeed
 from feeds.pastebin import PastebinFeed
-from feeds.github import GitHubFeed
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +21,8 @@ FEED_CLASSES = {
     "intelx": IntelXFeed,
     "pastebin": PastebinFeed,
     "github": GitHubFeed,
+    "hudsonrock": HudsonRockFeed,
+    "crtsh": CrtShFeed,
 }
 
 
@@ -27,29 +32,50 @@ def detect_target_type(target: str) -> str:
     return "domain"
 
 
-async def run_feed(feed_name: str, feed_class, config: dict, target: str, target_type: str) -> list[dict]:
+async def run_feed(
+    feed_name: str,
+    feed_class,
+    config: dict,
+    target: str,
+    target_type: str,
+    progress_cb: Callable | None = None,
+) -> list[dict]:
     feed = feed_class(config)
     results = []
     status = "ok"
     error = None
+    started = time.monotonic()
+
+    def _notify(state: str, msg: str = "") -> None:
+        if progress_cb:
+            progress_cb(feed_name, state, len(results), msg, time.monotonic() - started)
 
     try:
         if not feed.supports(target_type):
             logger.debug("[%s] Does not support target type '%s' — skipping", feed_name, target_type)
+            _notify("skipped", f"Not applicable for {target_type}")
             return []
 
         feed_cfg = config.get("feeds", {}).get(feed_name, {})
         if not feed_cfg.get("enabled", True):
             logger.debug("[%s] Disabled in config — skipping", feed_name)
+            _notify("skipped", "Disabled in config")
             return []
 
+        _notify("running")
         results = await feed.lookup(target, target_type)
-        logger.info("[%s] %d result(s) for %s", feed_name, len(results), target)
+
+        if feed._skip_reason:
+            _notify("skipped", feed._skip_reason)
+        else:
+            logger.info("[%s] %d result(s) for %s", feed_name, len(results), target)
+            _notify("done")
 
     except Exception as e:
         status = "error"
         error = str(e)
         logger.error("[%s] Error during lookup: %s", feed_name, e)
+        _notify("error", str(e)[:60])
     finally:
         await feed.close()
         _update_feed_status(feed_name, status, error, len(results))
@@ -57,7 +83,7 @@ async def run_feed(feed_name: str, feed_class, config: dict, target: str, target
     return results
 
 
-def _update_feed_status(feed_name: str, status: str, error: Optional[str], result_count: int) -> None:
+def _update_feed_status(feed_name: str, status: str, error: str | None, result_count: int) -> None:
     try:
         with db_session() as db:
             row = db.query(FeedStatus).filter_by(feed_name=feed_name).first()
@@ -86,9 +112,7 @@ def save_results(results: list[dict]) -> tuple[int, int]:
             incoming_hashes = [r["hash"] for r in results]
             existing_hashes = {
                 row[0]
-                for row in db.query(ExposedCredential.hash)
-                .filter(ExposedCredential.hash.in_(incoming_hashes))
-                .all()
+                for row in db.query(ExposedCredential.hash).filter(ExposedCredential.hash.in_(incoming_hashes)).all()
             }
 
             for result in results:
@@ -119,20 +143,23 @@ def save_results(results: list[dict]) -> tuple[int, int]:
     return new_count, dupe_count
 
 
-async def aggregate(target: str, config: dict, feed_names: Optional[list[str]] = None) -> list[dict]:
+async def aggregate(
+    target: str,
+    config: dict,
+    feed_names: list[str] | None = None,
+    progress_cb: Callable | None = None,
+) -> list[dict]:
     """Run all enabled feeds against a target and return all results."""
     target_type = detect_target_type(target)
     logger.info("Scanning target: %s (type: %s)", target, target_type)
 
-    feeds_to_run = {
-        name: cls for name, cls in FEED_CLASSES.items()
-        if feed_names is None or name in feed_names
-    }
+    feeds_to_run = {name: cls for name, cls in FEED_CLASSES.items() if feed_names is None or name in feed_names}
 
-    tasks = [
-        run_feed(name, cls, config, target, target_type)
-        for name, cls in feeds_to_run.items()
-    ]
+    if progress_cb:
+        for name in feeds_to_run:
+            progress_cb(name, "pending", 0, "", 0.0)
+
+    tasks = [run_feed(name, cls, config, target, target_type, progress_cb) for name, cls in feeds_to_run.items()]
 
     all_results = []
     feed_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -145,7 +172,9 @@ async def aggregate(target: str, config: dict, feed_names: Optional[list[str]] =
     new_count, dupe_count = save_results(all_results)
     logger.info(
         "Scan complete: %d total, %d new, %d duplicates",
-        len(all_results), new_count, dupe_count,
+        len(all_results),
+        new_count,
+        dupe_count,
     )
 
     return all_results

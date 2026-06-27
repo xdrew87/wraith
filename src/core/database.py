@@ -1,11 +1,9 @@
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator
 
-from sqlalchemy import (
-    Boolean, Column, DateTime, Index, Integer, String, Text, create_engine, event
-)
+from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -131,6 +129,7 @@ def init_db(config: dict) -> None:
 
     # Enable WAL mode for SQLite to improve concurrent read/write performance
     if db_url.startswith("sqlite"):
+
         @event.listens_for(_engine, "connect")
         def set_sqlite_pragma(dbapi_conn, _connection_record):
             cursor = dbapi_conn.cursor()

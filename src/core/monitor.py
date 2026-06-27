@@ -3,8 +3,8 @@ import logging
 from datetime import datetime, timezone
 
 from alerting.notifier import queue_alerts
-from core.database import WatchTarget, db_session
 from core.aggregator import aggregate
+from core.database import WatchTarget, db_session
 
 logger = logging.getLogger(__name__)
 

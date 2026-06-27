@@ -19,6 +19,7 @@ class HIBPFeed(BaseFeed):
 
     async def lookup(self, target: str, target_type: str) -> list[dict]:
         if not self.api_key:
+            self._skip_reason = "No API key"
             logger.warning("[HIBP] No API key configured — skipping")
             return []
 
@@ -41,18 +42,20 @@ class HIBPFeed(BaseFeed):
         if isinstance(data, list):
             for breach in data:
                 severity = self._classify_severity(breach.get("DataClasses", []))
-                results.append(self.make_result(
-                    target=email,
-                    source_feed=self.name,
-                    exposure_type="email_breach",
-                    value=email,
-                    severity=severity,
-                    breach_name=breach.get("Name"),
-                    breach_date=breach.get("BreachDate"),
-                    description=f"Exposed in {breach.get('Name')} breach. "
-                                f"Data types: {', '.join(breach.get('DataClasses', []))}",
-                    raw=breach,
-                ))
+                results.append(
+                    self.make_result(
+                        target=email,
+                        source_feed=self.name,
+                        exposure_type="email_breach",
+                        value=email,
+                        severity=severity,
+                        breach_name=breach.get("Name"),
+                        breach_date=breach.get("BreachDate"),
+                        description=f"Exposed in {breach.get('Name')} breach. "
+                        f"Data types: {', '.join(breach.get('DataClasses', []))}",
+                        raw=breach,
+                    )
+                )
         return results
 
     async def _lookup_domain(self, domain: str) -> list[dict]:
@@ -68,16 +71,18 @@ class HIBPFeed(BaseFeed):
         if isinstance(data, dict):
             for email, breaches in data.items():
                 for breach_name in breaches:
-                    results.append(self.make_result(
-                        target=domain,
-                        source_feed=self.name,
-                        exposure_type="domain_breach",
-                        value=email,
-                        severity="HIGH",
-                        breach_name=breach_name,
-                        description=f"{email} exposed in {breach_name}",
-                        raw={"email": email, "breach": breach_name},
-                    ))
+                    results.append(
+                        self.make_result(
+                            target=domain,
+                            source_feed=self.name,
+                            exposure_type="domain_breach",
+                            value=email,
+                            severity="HIGH",
+                            breach_name=breach_name,
+                            description=f"{email} exposed in {breach_name}",
+                            raw={"email": email, "breach": breach_name},
+                        )
+                    )
         return results
 
     def _classify_severity(self, data_classes: list[str]) -> str:
