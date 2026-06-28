@@ -126,9 +126,9 @@ def health():
         with db_session() as db:
             db.execute(__import__("sqlalchemy").text("SELECT 1"))
         return jsonify({"status": "ok", "db": "ok"})
-    except Exception as e:
-        logger.error("Health check failed: %s", e)
-        return jsonify({"status": "degraded", "db": "error", "detail": str(e)}), 503
+    except Exception:
+        logger.exception("Health check failed")
+        return jsonify({"status": "degraded", "db": "error", "detail": "Database check failed"}), 503
 
 
 # ---------------------------------------------------------------------------
