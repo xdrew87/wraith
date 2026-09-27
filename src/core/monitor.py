@@ -42,7 +42,9 @@ async def run_scan_cycle(config: dict) -> None:
                     wt.last_scanned_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     db.commit()
 
-            await queue_alerts(wt_target, results, config)
+            # Only alert on findings first seen in this cycle — previously stored ones were already alerted
+            new_results = [r for r in results if r.get("is_new")]
+            await queue_alerts(wt_target, new_results, config)
 
         except Exception as e:
             logger.error("Error scanning %s: %s", wt_target, e)

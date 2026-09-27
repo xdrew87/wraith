@@ -2,7 +2,19 @@
 
 Base URL: `http://localhost:5050` (configurable via `--host` and `--port`)
 
-All endpoints return JSON. Authentication is not required for local deployments (dashboard binds to `127.0.0.1` by default). Rate limits apply to prevent abuse.
+All endpoints return JSON. Rate limits apply to prevent abuse.
+
+### Authentication
+
+When `DASHBOARD_API_KEY` (or `dashboard.api_key` in `config.yaml`) is set, every `/api/*` endpoint except `/api/v1/health` requires a bearer token:
+
+```bash
+curl -H "Authorization: Bearer $DASHBOARD_API_KEY" http://localhost:5050/api/v1/stats
+```
+
+Missing or invalid tokens return `401 {"error": "Unauthorized"}`. The web dashboard prompts for the key and keeps it in the browser tab's session storage.
+
+Without a key the API is unauthenticated, so the dashboard refuses to start on any host other than `127.0.0.1` / `localhost` / `::1`. Generate a key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
 ---
 

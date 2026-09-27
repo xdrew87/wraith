@@ -19,6 +19,14 @@ cp .env.example .env
 # Fill in API keys and alert credentials
 ```
 
+`DASHBOARD_API_KEY` is **required** — the container binds to `0.0.0.0`, and `docker compose up` refuses to start without it:
+
+```bash
+echo "DASHBOARD_API_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env
+```
+
+The SQLite database is stored at `/app/data/wraith.db` on the `wraith-data` volume. Set `DATABASE_URL` to use PostgreSQL instead.
+
 ### 2. Start the service
 
 ```bash
@@ -120,6 +128,7 @@ py src/main.py init
 ## Security Hardening
 
 - **Bind to loopback**: Default `--host 127.0.0.1` prevents external access. Use a reverse proxy for external exposure.
+- **API key**: Set `DASHBOARD_API_KEY` for any non-loopback deployment — the dashboard will not start on `0.0.0.0` without it.
 - **TLS**: Always terminate TLS at the reverse proxy layer.
 - **CORS**: Set `DASHBOARD_ALLOWED_ORIGINS` to your exact dashboard URL.
 - **Secrets**: Never commit `.env` to version control. Use a secrets manager in production.

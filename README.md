@@ -151,6 +151,7 @@ Edit `config.yaml` for persistent defaults. Set environment variables to overrid
 | `ALERT_TO_EMAIL` | `alerting.smtp.to_email` | Alert recipient address |
 | `SLACK_WEBHOOK_URL` | `alerting.slack.webhook_url` | Slack incoming webhook URL |
 | `DISCORD_WEBHOOK_URL` | `alerting.discord.webhook_url` | Discord webhook URL |
+| `DASHBOARD_API_KEY` | `dashboard.api_key` | Bearer token required on all API routes except health. Mandatory when binding to a non-loopback host |
 | `DASHBOARD_ALLOWED_ORIGINS` | — | Comma-separated CORS origins (default: `http://localhost:5050`) |
 
 ### config.yaml Reference
@@ -183,6 +184,9 @@ logging:
 ## Docker
 
 ```bash
+# Set a dashboard API key (required — the container listens on 0.0.0.0)
+echo "DASHBOARD_API_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env
+
 # Build and run
 docker compose up -d
 
