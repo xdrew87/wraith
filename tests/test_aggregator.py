@@ -73,3 +73,55 @@ class TestAggregator:
             results = await aggregate("example.com", BASE_CONFIG, ["hibp"])
 
         assert len(results) > 0
+
+    def test_save_results_tags_new_and_duplicate(self):
+        from core.aggregator import save_results
+        from core.database import init_db
+
+        init_db(BASE_CONFIG)
+
+        def _result(h):
+            return {
+                "target": "example.com",
+                "source_feed": "HIBP",
+                "exposure_type": "email",
+                "value": h,
+                "severity": "HIGH",
+                "hash": h,
+            }
+
+        first = [_result("tag-a"), _result("tag-b")]
+        assert save_results(first) == (2, 0)
+        assert all(r["is_new"] for r in first)
+
+        # Re-seen findings plus one in-batch duplicate — only tag-c is new
+        second = [_result("tag-a"), _result("tag-c"), _result("tag-c")]
+        assert save_results(second) == (1, 2)
+        assert [r["is_new"] for r in second] == [False, True, False]
+
+
+class TestMonitor:
+    @pytest.mark.asyncio
+    async def test_scan_cycle_alerts_only_on_new_findings(self):
+        from core.database import WatchTarget, db_session, init_db
+        from core.monitor import run_scan_cycle
+
+        init_db(BASE_CONFIG)
+        with db_session() as db:
+            db.add(WatchTarget(target="monitor.example.com", target_type="domain", active=True))
+            db.commit()
+
+        results = [
+            {"hash": "old", "severity": "HIGH", "is_new": False},
+            {"hash": "new", "severity": "HIGH", "is_new": True},
+        ]
+        with (
+            patch("core.monitor.aggregate", new=AsyncMock(return_value=results)),
+            patch("core.monitor.queue_alerts", new=AsyncMock()) as mock_queue,
+        ):
+            await run_scan_cycle(BASE_CONFIG)
+
+        mock_queue.assert_awaited_once()
+        target, alerted, _ = mock_queue.await_args.args
+        assert target == "monitor.example.com"
+        assert [r["hash"] for r in alerted] == ["new"]

@@ -59,6 +59,7 @@ alerting:
     webhook_url: ""  # DISCORD_WEBHOOK_URL
 
 dashboard:
+  api_key: ""  # DASHBOARD_API_KEY — bearer token for the API. Required unless bound to 127.0.0.1
   secret_key: ""  # DASHBOARD_SECRET_KEY — set for production
   allowed_origins: ""  # DASHBOARD_ALLOWED_ORIGINS — comma-separated. Default: http://localhost:5050
 

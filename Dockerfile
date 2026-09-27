@@ -16,7 +16,7 @@ COPY dashboard/ ./dashboard/
 COPY config.yaml .
 
 # Create required directories
-RUN mkdir -p logs outputs
+RUN mkdir -p data logs outputs
 
 # Non-root user for security
 RUN useradd -m -u 1001 wraith && chown -R wraith:wraith /app

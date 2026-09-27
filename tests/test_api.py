@@ -22,7 +22,9 @@ BASE_CONFIG = {
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_API_KEY", raising=False)
+
     import core.database as db_module
     db_module._engine = None
     db_module._SessionLocal = None
@@ -72,6 +74,52 @@ def seeded_client(client):
         db.commit()
 
     return client
+
+
+class TestAuthentication:
+    KEY = "test-secret-key"
+
+    @pytest.fixture
+    def auth_client(self, client):
+        import dashboard.backend.app as app_module
+        app_module._config = {**BASE_CONFIG, "dashboard": {"api_key": self.KEY}}
+        yield client
+        app_module._config = BASE_CONFIG
+
+    def test_api_open_when_no_key_configured(self, client):
+        assert client.get("/api/v1/stats").status_code == 200
+
+    def test_missing_token_rejected(self, auth_client):
+        r = auth_client.get("/api/v1/findings")
+        assert r.status_code == 401
+        assert r.get_json()["error"] == "Unauthorized"
+
+    def test_wrong_token_rejected(self, auth_client):
+        r = auth_client.get("/api/v1/findings", headers={"Authorization": "Bearer nope"})
+        assert r.status_code == 401
+
+    def test_non_bearer_scheme_rejected(self, auth_client):
+        r = auth_client.get("/api/v1/findings", headers={"Authorization": f"Basic {self.KEY}"})
+        assert r.status_code == 401
+
+    def test_valid_token_accepted(self, auth_client):
+        r = auth_client.get("/api/v1/findings", headers={"Authorization": f"Bearer {self.KEY}"})
+        assert r.status_code == 200
+
+    def test_write_endpoints_require_token(self, auth_client):
+        assert auth_client.post("/api/v1/scan", json={"target": "example.com"}).status_code == 401
+        assert auth_client.post("/api/v1/targets", json={"target": "example.com"}).status_code == 401
+
+    def test_health_exempt(self, auth_client):
+        assert auth_client.get("/api/v1/health").status_code == 200
+
+    def test_index_page_served_without_token(self, auth_client):
+        assert auth_client.get("/").status_code == 200
+
+    def test_key_read_from_env(self, client, monkeypatch):
+        monkeypatch.setenv("DASHBOARD_API_KEY", self.KEY)
+        assert client.get("/api/v1/stats").status_code == 401
+        assert client.get("/api/v1/stats", headers={"Authorization": f"Bearer {self.KEY}"}).status_code == 200
 
 
 class TestHealthEndpoint:
