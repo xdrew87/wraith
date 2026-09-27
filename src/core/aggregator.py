@@ -100,7 +100,13 @@ def _update_feed_status(feed_name: str, status: str, error: str | None, result_c
 
 
 def save_results(results: list[dict]) -> tuple[int, int]:
-    """Persist results to DB. Returns (new_count, duplicate_count)."""
+    """Persist results to DB. Returns (new_count, duplicate_count).
+
+    Each result dict is tagged in place with ``is_new`` — True only if this call inserted it.
+    """
+    for result in results:
+        result["is_new"] = False
+
     if not results:
         return 0, 0
 
@@ -134,11 +140,15 @@ def save_results(results: list[dict]) -> tuple[int, int]:
                 )
                 db.add(cred)
                 existing_hashes.add(result["hash"])
+                result["is_new"] = True
                 new_count += 1
 
             db.commit()
     except Exception as e:
         logger.error("Error saving results to DB: %s", e)
+        for result in results:
+            result["is_new"] = False
+        return 0, 0
 
     return new_count, dupe_count
 

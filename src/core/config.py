@@ -25,6 +25,7 @@ ENV_OVERRIDES = {
     "alerting.slack.webhook_url": "SLACK_WEBHOOK_URL",
     "alerting.discord.webhook_url": "DISCORD_WEBHOOK_URL",
     "dashboard.secret_key": "DASHBOARD_SECRET_KEY",
+    "dashboard.api_key": "DASHBOARD_API_KEY",
     "dashboard.allowed_origins": "DASHBOARD_ALLOWED_ORIGINS",
 }
 

@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -45,6 +46,36 @@ limiter = Limiter(
     default_limits=["300 per minute", "30 per second"],
     storage_uri="memory://",
 )
+
+
+# ---------------------------------------------------------------------------
+# Authentication — bearer token required on all API routes except health
+# ---------------------------------------------------------------------------
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
+AUTH_EXEMPT_PATHS = {"/api/v1/health"}
+
+
+def _api_key() -> str:
+    return (_config.get("dashboard", {}).get("api_key") or os.getenv("DASHBOARD_API_KEY") or "").strip()
+
+
+@app.before_request
+def require_api_key():
+    if not request.path.startswith("/api/") or request.path in AUTH_EXEMPT_PATHS:
+        return None
+    if request.method == "OPTIONS":
+        return None  # CORS preflight carries no credentials
+
+    expected = _api_key()
+    if not expected:
+        # No key configured — only permitted when bound to loopback (enforced at startup)
+        return None
+
+    header = request.headers.get("Authorization", "")
+    scheme, _, token = header.partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(token.strip().encode(), expected.encode()):
+        return jsonify({"error": "Unauthorized"}), 401
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -589,11 +620,20 @@ if __name__ == "__main__":
 
     config_path = Path(__file__).resolve().parents[2] / "config.yaml"
     _config = load_config(str(config_path))
-    init_db(_config)
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
+
+    if not _api_key():
+        if args.host not in LOOPBACK_HOSTS:
+            sys.exit(
+                f"Refusing to bind dashboard to {args.host} without authentication. "
+                "Set DASHBOARD_API_KEY (or dashboard.api_key in config.yaml)."
+            )
+        logger.warning("DASHBOARD_API_KEY not set — API is unauthenticated (loopback only)")
+
+    init_db(_config)
 
     app.run(host=args.host, port=args.port, debug=False)
