@@ -7,7 +7,7 @@ SQLAlchemy>=2.0.54
 rich>=15.0.0
 aiofiles>=25.1.0
 pytest>=9.1.1
-pytest-asyncio>=1.4.0
+pytest-asyncio>=1.4.1
 pytest-mock>=3.15.1
 
 # Dashboard
